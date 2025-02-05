@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Edit2, Trash2, Clock, Tag } from 'lucide-react';
+import { FileText, Edit2, Trash2, Clock, Tag, Save } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { useBlogPosts } from '../hooks/useBlogPosts';
 import { deleteBlogPost } from '../lib/supabase/blogService';
@@ -18,12 +18,40 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
   const [toast, setToast] = React.useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } else if (diffDays < 7) {
+      return `${diffDays}日前`;
+    } else {
+      return date.toLocaleDateString('ja-JP', {
+        month: 'short',
+        day: 'numeric'
+      });
+    }
   };
+
+  // 記事を下書きと公開済みに分類
+  const { drafts, published } = React.useMemo(() => {
+    return posts.reduce(
+      (acc, post) => {
+        if (post.status === 'draft') {
+          acc.drafts.push(post);
+        } else {
+          acc.published.push(post);
+        }
+        return acc;
+      },
+      { drafts: [] as BlogPost[], published: [] as BlogPost[] }
+    );
+  }, [posts]);
 
   const handleDeletePost = async (postId: string) => {
     if (!user) return;
@@ -89,54 +117,109 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
           </button>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => (
-            <div
-              key={post.id}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-            >
-              <div className="p-6">
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  <Clock className="h-4 w-4" />
-                  <span>{formatDate(post.createdAt)}</span>
-                  <Tag className="h-4 w-4 ml-2" />
-                  <span className="capitalize">{post.tone}</span>
-                </div>
-                <h2 className="text-xl font-semibold mb-2 line-clamp-2">
-                  {post.title}
-                </h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
-                  {post.theme}
-                </p>
-                <div className="flex items-center justify-between mt-4">
-                  <BlogPostStatusToggle
+        <div className="space-y-8">
+          {drafts.length > 0 && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Save className="h-5 w-5" />
+                下書き
+                <span className="text-sm font-normal text-gray-500">
+                  ({drafts.length}件)
+                </span>
+              </h2>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {drafts.map((post) => (
+                  <PostCard
+                    key={post.id}
                     post={post}
+                    onSelect={onSelectPost}
+                    onDelete={handleDeletePost}
                     onStatusChange={handleStatusChange}
+                    formatDate={formatDate}
                   />
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onSelectPost(post)}
-                      className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
-                      title="編集"
-                    >
-                      <Edit2 className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeletePost(post.id)}
-                      className="p-2 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                      title="削除"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {published.length > 0 && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                公開済み
+                <span className="text-sm font-normal text-gray-500">
+                  ({published.length}件)
+                </span>
+              </h2>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {published.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    onSelect={onSelectPost}
+                    onDelete={handleDeletePost}
+                    onStatusChange={handleStatusChange}
+                    formatDate={formatDate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {toast && <Toast type={toast.type} message={toast.message} />}
+    </div>
+  );
+}
+
+type PostCardProps = {
+  post: BlogPost;
+  onSelect: (post: BlogPost) => void;
+  onDelete: (postId: string) => Promise<void>;
+  onStatusChange: (post: BlogPost) => Promise<void>;
+  formatDate: (date: string) => string;
+};
+
+function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: PostCardProps) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+      <div className="p-6">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
+          <Clock className="h-4 w-4" />
+          <span>{formatDate(post.updatedAt)}</span>
+          <Tag className="h-4 w-4 ml-2" />
+          <span className="capitalize">{post.tone}</span>
+        </div>
+        <h2 className="text-xl font-semibold mb-2 line-clamp-2">
+          {post.title}
+        </h2>
+        <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
+          {post.theme}
+        </p>
+        <div className="flex items-center justify-between mt-4">
+          <BlogPostStatusToggle
+            post={post}
+            onStatusChange={onStatusChange}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onSelect(post)}
+              className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+              title="編集"
+            >
+              <Edit2 className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => onDelete(post.id)}
+              className="p-2 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+              title="削除"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Edit2, Eye } from 'lucide-react';
+import { ArrowLeft, Edit2 } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { Toast } from './Toast';
 
@@ -45,21 +45,13 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onEdit(post)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <Edit2 className="h-5 w-5" />
-              <span>編集</span>
-            </button>
-            <button
-              className="flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <Eye className="h-5 w-5" />
-              <span>プレビュー</span>
-            </button>
-          </div>
+          <button
+            onClick={() => onEdit(post)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Edit2 className="h-5 w-5" />
+            <span>編集</span>
+          </button>
         </div>
 
         <div className="space-y-6">
