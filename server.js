@@ -81,7 +81,18 @@ app.get('/api/validate-token', async (req, res) => {
   }
 });
 
-// チャット完了エンドポイントの改善
+// プロセスの例外ハンドリングを追加
+process.on('uncaughtException', (error) => {
+  console.error('予期せぬエラーが発生しました:', error);
+  // エラーをログに記録するが、プロセスは終了させない
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('未処理のPromise rejection:', reason);
+  // エラーをログに記録するが、プロセスは終了させない
+});
+
+// APIリクエストのタイムアウト設定を追加
 app.post('/api/chat/completions', async (req, res) => {
   try {
     const { messages } = req.body;
@@ -99,32 +110,48 @@ app.post('/api/chat/completions', async (req, res) => {
     }
     
     console.log('使用するAPIキー:', cleanApiKey.substring(0, 10) + '...');
-    
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cleanApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000,
-        n: 1,
-        stream: false
-      })
-    });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenAI APIエラーレスポンス:', errorData);
-      throw new Error(`APIリクエストが失敗: ${errorData.error?.message || response.statusText}`);
+    // タイムアウト付きでfetchを実行
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30秒でタイムアウト
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cleanApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1000,
+          n: 1,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('OpenAI APIエラーレスポンス:', errorData);
+        throw new Error(`APIリクエストが失敗: ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('OpenAI API リクエスト成功');
+      res.json(data);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('APIリクエストがタイムアウトしました');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const data = await response.json();
-    console.log('OpenAI API リクエスト成功');
-    res.json(data);
   } catch (error) {
     console.error('Error in /api/chat/completions:', error);
     res.status(500).json({ 
@@ -133,6 +160,15 @@ app.post('/api/chat/completions', async (req, res) => {
       stack: error.stack
     });
   }
+});
+
+// サーバーのグレースフルシャットダウン
+process.on('SIGTERM', () => {
+  console.log('サーバーをシャットダウンします...');
+  server.close(() => {
+    console.log('サーバーを正常に終了しました');
+    process.exit(0);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
