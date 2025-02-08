@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fetch from 'node-fetch';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,10 +12,18 @@ const __dirname = dirname(__filename);
 // グローバルなエラーハンドリングの設定
 process.on('uncaughtException', (error) => {
   console.error('予期せぬエラーが発生しました:', error);
+  // エラーログを記録
+  fs.appendFileSync('error.log', `${new Date().toISOString()} - Uncaught Exception:\n${error.stack}\n\n`);
+  // 3秒後に安全に終了
+  setTimeout(() => {
+    process.exit(1);
+  }, 3000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未処理のPromise拒否:', reason);
+  // エラーログを記録
+  fs.appendFileSync('error.log', `${new Date().toISOString()} - Unhandled Rejection:\n${reason}\n\n`);
 });
 
 // プロセスシグナルのハンドリング
@@ -28,20 +37,27 @@ process.on('SIGINT', () => {
   shutdown();
 });
 
+// グローバルなサーバーインスタンス
+let server;
+
 // グレースフルシャットダウン関数
 function shutdown() {
   // アクティブな接続を終了
   if (server) {
+    console.log('アクティブな接続を終了中...');
     server.close(() => {
       console.log('サーバーをシャットダウンしました。');
       process.exit(0);
     });
 
-    // 10秒後に強制終了
+    // 3秒後に強制終了（タイムアウト時間を短縮）
     setTimeout(() => {
-      console.error('グレースフルシャットダウンがタイムアウトしました。強制終了します。');
-      process.exit(1);
-    }, 10000);
+      console.log('強制シャットダウンを実行します。');
+      process.exit(0);
+    }, 3000);
+  } else {
+    console.log('サーバーインスタンスが見つかりません。直ちに終了します。');
+    process.exit(0);
   }
 }
 
@@ -74,9 +90,9 @@ if (!apiKey) {
   process.exit(1);
 }
 
-// APIキーの形式を検証
-if (!apiKey.startsWith('sk-')) {
-  console.error('Error: Invalid OPENAI_API_KEY format. Key should start with "sk-"');
+// APIキーの形式を検証（sk-proj-で始まるキーも許可）
+if (!apiKey.startsWith('sk-') && !apiKey.startsWith('sk-proj-')) {
+  console.error('Error: Invalid OPENAI_API_KEY format. Key should start with "sk-" or "sk-proj-"');
   process.exit(1);
 }
 
@@ -204,7 +220,7 @@ app.post('/api/chat/completions', async (req, res) => {
     }
     
     const cleanApiKey = apiKey.replace(/[^\x20-\x7E]/g, '').trim();
-    if (!cleanApiKey.startsWith('sk-')) {
+    if (!cleanApiKey.startsWith('sk-') && !cleanApiKey.startsWith('sk-proj-')) {
       throw new Error('APIキーの形式が正しくありません');
     }
     
@@ -467,14 +483,23 @@ ${JSON.stringify(outline, null, 2)}
     const data = await response.json();
     console.log('記事本文生成成功');
     
-    // レスポンスの内容をJSONとしてパース
-    const generatedContent = JSON.parse(data.choices[0].message.content);
-    res.json(generatedContent);
+    try {
+      // 制御文字を除去してからJSONをパース
+      const cleanContent = data.choices[0].message.content.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+      console.log('生成されたコンテンツ:', cleanContent);
+      const generatedContent = JSON.parse(cleanContent);
+      res.json(generatedContent);
+    } catch (parseError) {
+      console.error('JSONパースエラー:', parseError);
+      console.error('生のコンテンツ:', data.choices[0].message.content);
+      throw new Error('生成されたコンテンツの形式が不正です');
+    }
   } catch (error) {
     console.error('Error in /api/generate-content:', error);
     res.status(500).json({ 
       error: '記事本文生成エラー',
-      details: error.message
+      details: error.message,
+      stack: error.stack
     });
   }
 });
@@ -493,7 +518,7 @@ const PORT = process.env.PORT || 3000;
 // サーバーの起動処理の改善
 const startServer = () => {
   try {
-    const server = app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log('Environment variables:');
       console.log('- OPENAI_API_KEY:', apiKey ? `設定されています (${apiKey.substring(0, 10)}...)` : '設定されていません');
@@ -503,23 +528,6 @@ const startServer = () => {
     server.keepAliveTimeout = 65000;
     server.headersTimeout = 66000;
 
-    // グレースフルシャットダウンの設定
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM received. Starting graceful shutdown...');
-      server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-      });
-    });
-
-    process.on('SIGINT', () => {
-      console.log('SIGINT received. Starting graceful shutdown...');
-      server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-      });
-    });
-
     return server;
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -528,4 +536,4 @@ const startServer = () => {
 };
 
 // サーバーの起動
-const server = startServer(); 
+startServer(); 
