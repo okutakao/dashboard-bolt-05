@@ -7,7 +7,6 @@ import { AuthForm } from './components/AuthForm';
 import { useAuth } from './contexts/AuthContext';
 import { BlogPost } from './lib/models';
 import { useBlogPosts } from './hooks/useBlogPosts';
-import { AITest } from './components/AITest';
 import { Toast } from './components/Toast';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from './supabase';
@@ -20,15 +19,6 @@ function App() {
   const [view, setView] = useState<AppView>('list');
   const [selectedPost, setSelectedPost] = useState<BlogPost | undefined>();
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
-
-  // 初期化時に自動ログアウト
-  useEffect(() => {
-    const clearSession = async () => {
-      await supabase.auth.signOut();
-      console.log('App: セッションをクリアしました');
-    };
-    clearSession();
-  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -87,8 +77,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <div className="container mx-auto">
-        <div className="flex items-center justify-between mb-4">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 space-y-4 sm:space-y-0">
           <div className="flex items-center gap-4">
             {view !== 'list' && (
               <button
@@ -111,9 +101,7 @@ function App() {
           </div>
         </div>
 
-        <main className="container mx-auto px-4 py-8">
-          {view === 'list' && <AITest />}
-
+        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {view === 'list' && (
             <BlogPostList
               onSelectPost={handleSelectPost}

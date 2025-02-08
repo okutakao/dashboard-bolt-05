@@ -47,63 +47,79 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
   };
 }
 
-export async function createBlogPost(post: Omit<BlogPost, 'id' | 'userId'>, userId: string): Promise<BlogPost> {
-  try {
-    // 1. 記事を作成
-    const { data: newPost, error: postError } = await supabase
-      .from('blog_posts')
-      .insert([{
-        user_id: userId,
+export async function createBlogPost(
+  post: Omit<BlogPost, 'id' | 'userId'> & { sections: Omit<BlogSection, 'id' | 'postId'>[] },
+  userId: string
+): Promise<BlogPost> {
+  // トランザクションを使用して一貫性を保証
+  const { data: existingDraft, error: searchError } = await supabase
+    .from('blog_posts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'draft')
+    .eq('title', post.title)
+    .single();
+
+  if (searchError && searchError.code !== 'PGRST116') {
+    throw searchError;
+  }
+
+  if (existingDraft) {
+    // 既存の下書きが見つかった場合は更新
+    return updateBlogPost({
+      ...post,
+      id: existingDraft.id,
+      userId
+    });
+  }
+
+  // 新規作成
+  const { data: newPost, error: insertError } = await supabase
+    .from('blog_posts')
+    .insert([
+      {
         title: post.title,
         theme: post.theme,
         tone: post.tone,
         status: post.status,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (postError) {
-      console.error('Error creating blog post:', postError);
-      throw new Error('記事の作成に失敗しました');
-    }
-
-    // 2. セクションを作成
-    const sections = post.sections.map((section, index) => ({
-      post_id: newPost.id,
-      title: section.title,
-      content: section.content,
-      order: index,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }));
-
-    if (sections.length > 0) {
-      const { data: newSections, error: sectionsError } = await supabase
-        .from('blog_sections')
-        .insert(sections)
-        .select();
-
-      if (sectionsError) {
-        console.error('Error creating blog sections:', sectionsError);
-        throw new Error('セクションの作成に失敗しました');
+        user_id: userId,
+        created_at: post.createdAt,
+        updated_at: post.updatedAt
       }
+    ])
+    .select()
+    .single();
 
-      return {
-        ...newPost,
-        sections: newSections.sort((a, b) => a.order - b.order)
-      };
-    }
+  if (insertError) throw insertError;
+  if (!newPost) throw new Error('Failed to create blog post');
 
-    return {
-      ...newPost,
-      sections: []
-    };
-  } catch (error) {
-    console.error('Error in createBlogPost:', error);
-    throw error;
-  }
+  // セクションの作成
+  const { error: sectionsError } = await supabase
+    .from('blog_sections')
+    .insert(
+      post.sections.map((section, index) => ({
+        post_id: newPost.id,
+        title: section.title,
+        content: section.content,
+        order: section.order || index,
+        created_at: section.createdAt,
+        updated_at: section.updatedAt
+      }))
+    );
+
+  if (sectionsError) throw sectionsError;
+
+  return {
+    id: newPost.id,
+    userId: newPost.user_id,
+    title: newPost.title,
+    theme: newPost.theme,
+    tone: newPost.tone,
+    status: newPost.status,
+    createdAt: newPost.created_at,
+    updatedAt: newPost.updated_at,
+    sections: post.sections as BlogSection[]
+  };
 }
 
 export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {

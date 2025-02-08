@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit } from 'lucide-react';
+import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText } from 'lucide-react';
 import { BlogPost, BlogSection, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
@@ -42,6 +42,21 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+  const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
+  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
+  const [generatedOutline, setGeneratedOutline] = useState<{
+    sections: Array<{
+      title: string;
+      description: string;
+      recommendedLength: string;
+    }>;
+    estimatedReadingTime: string;
+    targetAudience: string;
+    keywords: string[];
+  } | null>(null);
+  const [draftId, setDraftId] = useState<string | undefined>(post?.id);
+  const [isSaving, setIsSaving] = useState(false);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -177,28 +192,31 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setSections(newSections);
   };
 
-  // 自動保存のための関数
+  // 自動保存のための関数を改善
   const saveAsDraft = useCallback(async () => {
     if (!user) return;
-    if (!validateFormForAutosave()) return; // 簡易バリデーションを使用
+    if (!validateFormForAutosave()) return;
+    if (isSaving) return; // 保存中は新たな保存を開始しない
 
+    setIsSaving(true);
     try {
       const now = new Date().toISOString();
       
-      if (post) {
+      if (draftId) {
+        // 既存の下書きを更新
         const updatedPost = await updateBlogPost({
-          id: post.id,
+          id: draftId,
           title,
           theme,
           tone,
           status: 'draft',
-          createdAt: post.createdAt,
+          createdAt: post?.createdAt || now,
           updatedAt: now,
           sections: sections.map((section, index) => {
             if (section.id) {
               return {
                 id: section.id,
-                postId: section.postId || post.id,
+                postId: section.postId || draftId,
                 title: section.title,
                 content: section.content,
                 order: index,
@@ -207,7 +225,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               } as BlogSection;
             } else {
               return {
-                postId: post.id,
+                postId: draftId,
                 title: section.title,
                 content: section.content,
                 order: index,
@@ -218,9 +236,8 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
           })
         });
         setLastSaved(new Date());
-        // 自動保存時はonSaveを呼び出さない
-        setToast({ type: 'success', message: '下書きを保存しました' });
       } else {
+        // 新規下書きを作成
         const newPost = await createBlogPost({
           title,
           theme,
@@ -236,23 +253,23 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             updatedAt: now
           }))
         }, user.id);
+        setDraftId(newPost.id); // 新規作成後にIDを保存
         setLastSaved(new Date());
-        // 自動保存時はonSaveを呼び出さない
-        setToast({ type: 'success', message: '下書きを保存しました' });
       }
     } catch (error) {
       console.error('下書き保存中のエラー:', error);
-      // 自動保存のエラーはトースト通知を表示しない
+    } finally {
+      setIsSaving(false);
     }
-  }, [post, title, theme, tone, sections, user]);
+  }, [post, draftId, title, theme, tone, sections, user, isSaving]);
 
-  // デバウンスされた自動保存
+  // デバウンスされた自動保存の間隔を延長
   const debouncedSave = useCallback(
     debounce(() => {
       if (validateFormForAutosave()) {
         saveAsDraft();
       }
-    }, 3000),
+    }, 10000), // 10秒に変更
     [saveAsDraft]
   );
 
@@ -268,9 +285,107 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     };
   }, [title, theme, tone, sections, debouncedSave]);
 
+  // タイトル生成関数を追加
+  const generateTitle = async () => {
+    if (!theme && sections.length === 0) {
+      setToast({ type: 'error', message: 'テーマまたは内容を入力してください' });
+      return;
+    }
+
+    setIsGeneratingTitle(true);
+    try {
+      const response = await fetch('http://localhost:3000/api/generate-title', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          theme,
+          content: sections.map(s => `${s.title}\n${s.content}`).join('\n\n')
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('タイトル生成に失敗しました');
+      }
+
+      const data = await response.json();
+      const titles = data.choices[0].message.content
+        .split('\n')
+        .filter((line: string) => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
+        .map((line: string) => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
+
+      setSuggestedTitles(titles);
+    } catch (error) {
+      console.error('タイトル生成エラー:', error);
+      setToast({ type: 'error', message: 'タイトル生成に失敗しました' });
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  };
+
+  // タイトルの選択
+  const handleSelectTitle = (title: string) => {
+    setTitle(title);
+    setSuggestedTitles([]);
+    setToast({ type: 'success', message: 'タイトルを設定しました' });
+  };
+
+  // 記事構成生成関数を追加
+  const generateOutline = async () => {
+    if (!theme) {
+      setToast({ type: 'error', message: 'テーマを入力してください' });
+      return;
+    }
+
+    setIsGeneratingOutline(true);
+    try {
+      const response = await fetch('http://localhost:3000/api/generate-outline', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          theme,
+          tone
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('記事構成の生成に失敗しました');
+      }
+
+      const data = await response.json();
+      setGeneratedOutline(data);
+      setToast({ type: 'success', message: '記事構成を生成しました' });
+    } catch (error) {
+      console.error('記事構成生成エラー:', error);
+      setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
+    } finally {
+      setIsGeneratingOutline(false);
+    }
+  };
+
+  // 生成された構成を適用する関数
+  const applyOutline = () => {
+    if (!generatedOutline) return;
+
+    const newSections = generatedOutline.sections.map((section, index) => ({
+      title: section.title,
+      content: section.description,
+      order: index,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    setSections(newSections);
+    setGeneratedOutline(null);
+    setToast({ type: 'success', message: '記事構成を適用しました' });
+  };
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex justify-between mb-4">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row justify-between mb-4 space-y-4 sm:space-y-0">
         <div className="text-sm text-gray-500">
           {lastSaved && `最終保存: ${lastSaved.toLocaleString()}`}
         </div>
@@ -301,26 +416,44 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         />
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium mb-1">
-              タイトル
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                }
-              }}
-              className={`w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600
-                ${errors.title ? 'border-red-500' : ''}`}
-              placeholder="記事のタイトルを入力"
-            />
-            {errors.title && (
-              <p className="mt-1 text-sm text-red-500">{errors.title}</p>
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="タイトルを入力"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+              />
+              <button
+                type="button"
+                onClick={generateTitle}
+                disabled={isGeneratingTitle}
+                className="w-full sm:w-auto px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Wand2 className="w-4 h-4" />
+                {isGeneratingTitle ? '生成中...' : 'AIでタイトル生成'}
+              </button>
+            </div>
+            {errors.title && <p className="text-red-500 text-sm">{errors.title}</p>}
+            
+            {/* タイトル候補の表示 */}
+            {suggestedTitles.length > 0 && (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">タイトル候補:</p>
+                <div className="space-y-2">
+                  {suggestedTitles.map((suggestedTitle, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSelectTitle(suggestedTitle)}
+                      className="w-full text-left px-4 py-2 text-sm bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      {suggestedTitle}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
@@ -366,6 +499,27 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               <option value="business">ビジネス</option>
               <option value="academic">アカデミック</option>
             </select>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={generateOutline}
+              disabled={isGeneratingOutline || !theme}
+              className="px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isGeneratingOutline ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>生成中...</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  <span>AIで記事構成を生成</span>
+                </>
+              )}
+            </button>
           </div>
 
           <div>
@@ -464,6 +618,74 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               ))}
             </div>
           </div>
+
+          {/* 生成された記事構成の表示 */}
+          {generatedOutline && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">生成された記事構成</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={applyOutline}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    適用
+                  </button>
+                  <button
+                    onClick={() => setGeneratedOutline(null)}
+                    className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm font-medium">推定読了時間:</span>
+                    <p className="text-sm">{generatedOutline.estimatedReadingTime}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium">想定読者:</span>
+                    <p className="text-sm">{generatedOutline.targetAudience}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <span className="text-sm font-medium">キーワード:</span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {generatedOutline.keywords.map((keyword, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <span className="text-sm font-medium">セクション:</span>
+                  {generatedOutline.sections.map((section, index) => (
+                    <div
+                      key={index}
+                      className="p-3 bg-white dark:bg-gray-700 rounded border dark:border-gray-600"
+                    >
+                      <h4 className="font-medium">{section.title}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                        {section.description}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                        推奨文字数: {section.recommendedLength}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-4">
             <button
