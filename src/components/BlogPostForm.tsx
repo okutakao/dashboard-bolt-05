@@ -57,6 +57,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   } | null>(null);
   const [draftId, setDraftId] = useState<string | undefined>(post?.id);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -340,6 +341,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     setIsGeneratingOutline(true);
     try {
+      console.log('記事構成生成開始:', { theme, tone });
       const response = await fetch('http://localhost:3000/api/generate-outline', {
         method: 'POST',
         headers: {
@@ -356,6 +358,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       }
 
       const data = await response.json();
+      console.log('生成された記事構成:', data);
       setGeneratedOutline(data);
       setToast({ type: 'success', message: '記事構成を生成しました' });
     } catch (error) {
@@ -363,11 +366,19 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
     } finally {
       setIsGeneratingOutline(false);
+      // デバッグ用：状態を確認
+      console.log('現在の状態:', {
+        title,
+        theme,
+        generatedOutline,
+        isGeneratingContent
+      });
     }
   };
 
   // 生成された構成を適用する関数
   const applyOutline = () => {
+    console.log('構成適用開始:', generatedOutline);
     if (!generatedOutline) return;
 
     const newSections = generatedOutline.sections.map((section, index) => ({
@@ -378,9 +389,72 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       updatedAt: new Date().toISOString(),
     }));
 
+    console.log('新しいセクション:', newSections);
     setSections(newSections);
     setGeneratedOutline(null);
     setToast({ type: 'success', message: '記事構成を適用しました' });
+    
+    // デバッグ用：状態を確認
+    console.log('構成適用後の状態:', {
+      title,
+      theme,
+      sections: newSections,
+      generatedOutline: null
+    });
+  };
+
+  // 記事本文生成関数を追加
+  const generateContent = async () => {
+    if (!title || !theme || (!generatedOutline && sections.length === 0)) {
+      setToast({ type: 'error', message: 'タイトル、テーマ、記事構成が必要です' });
+      return;
+    }
+
+    setIsGeneratingContent(true);
+    try {
+      const currentSections = sections.map(section => ({
+        title: section.title,
+        description: section.content,
+        recommendedLength: '500文字程度'
+      }));
+
+      const response = await fetch('http://localhost:3000/api/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          theme,
+          tone,
+          outline: {
+            sections: currentSections,
+            estimatedReadingTime: '10分程度',
+            targetAudience: 'プログラミング初心者',
+            keywords: [theme]
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('記事本文の生成に失敗しました');
+      }
+
+      const data = await response.json();
+      setSections(data.sections.map((section: any, index: number) => ({
+        title: section.title,
+        content: section.content,
+        order: index,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })));
+      setToast({ type: 'success', message: '記事本文を生成しました' });
+    } catch (error) {
+      console.error('記事本文生成エラー:', error);
+      setToast({ type: 'error', message: '記事本文の生成に失敗しました' });
+    } finally {
+      setIsGeneratingContent(false);
+    }
   };
 
   return (
@@ -517,6 +591,26 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
                 <>
                   <FileText className="w-4 h-4" />
                   <span>AIで記事構成を生成</span>
+                </>
+              )}
+            </button>
+            
+            {/* 記事本文生成ボタンを追加 */}
+            <button
+              type="button"
+              onClick={generateContent}
+              disabled={isGeneratingContent || !title || !theme || (!generatedOutline && sections.length === 0)}
+              className="px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isGeneratingContent ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>生成中...</span>
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4" />
+                  <span>AIで本文を生成</span>
                 </>
               )}
             </button>

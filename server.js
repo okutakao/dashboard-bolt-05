@@ -61,7 +61,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   credentials: true
 }));
 
@@ -393,6 +393,87 @@ app.post('/api/generate-outline', async (req, res) => {
     console.error('Error in /api/generate-outline:', error);
     res.status(500).json({ 
       error: '記事構成生成エラー',
+      details: error.message
+    });
+  }
+});
+
+// 記事本文生成エンドポイント
+app.post('/api/generate-content', async (req, res) => {
+  try {
+    const { title, theme, outline, tone } = req.body;
+    
+    if (!title || !theme || !outline) {
+      throw new Error('タイトル、テーマ、アウトラインは必須です');
+    }
+
+    console.log('記事本文生成リクエストを受信:', { title, theme, tone });
+    
+    const messages = [
+      {
+        role: "system",
+        content: "あなたは専門的な記事ライターです。与えられたテーマとアウトラインに基づいて、読者を惹きつける記事を生成してください。"
+      },
+      {
+        role: "user",
+        content: `以下の条件で記事を生成してください：
+
+タイトル: ${title}
+テーマ: ${theme}
+文体: ${tone || 'カジュアル'}
+アウトライン:
+${JSON.stringify(outline, null, 2)}
+
+条件：
+- 各セクションの推奨文字数に従う
+- ${tone === 'casual' ? 'カジュアルで親しみやすい文体' : tone === 'business' ? 'ビジネス向けの簡潔で明確な文体' : '学術的で客観的な文体'}を使用
+- 読者の興味を引く具体例を含める
+- 文章は自然で読みやすくする
+- 各セクションの内容は前後のセクションと自然に繋がるようにする
+
+形式：
+{
+  "sections": [
+    {
+      "title": "セクションタイトル",
+      "content": "セクションの内容"
+    }
+  ]
+}`
+      }
+    ];
+
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000,
+        n: 1,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`記事本文生成に失敗: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('記事本文生成成功');
+    
+    // レスポンスの内容をJSONとしてパース
+    const generatedContent = JSON.parse(data.choices[0].message.content);
+    res.json(generatedContent);
+  } catch (error) {
+    console.error('Error in /api/generate-content:', error);
+    res.status(500).json({ 
+      error: '記事本文生成エラー',
       details: error.message
     });
   }
