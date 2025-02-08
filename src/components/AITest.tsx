@@ -1,71 +1,104 @@
-import React, { useState } from 'react';
-import { generateBlogOutline, validateOutlineResponse } from '../lib/openai';
-import { Toast } from './Toast';
+import { useState } from 'react';
+import { sendChatMessage, sendChatMessageWithSystem } from '../lib/openai';
 
 export function AITest() {
-  const [theme, setTheme] = useState('');
+  const [message, setMessage] = useState('');
+  const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
-  const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleTest = async () => {
-    if (!theme.trim()) {
-      setToast({ type: 'error', message: 'テーマを入力してください' });
-      return;
-    }
-
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
+    setError(null);
+
     try {
-      const outline = await generateBlogOutline(theme, 'casual');
-      const validated = validateOutlineResponse(outline);
-      setResult(JSON.stringify(validated, null, 2));
-      setToast({ type: 'success', message: 'アウトライン生成に成功しました' });
-    } catch (error) {
-      console.error('Error:', error);
-      setToast({ type: 'error', message: error instanceof Error ? error.message : '生成に失敗しました' });
+      // 通常のチャットメッセージを送信
+      const result = await sendChatMessage(message);
+      setResponse(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSystemPromptTest = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // システムプロンプト付きのメッセージを送信
+      const result = await sendChatMessageWithSystem(
+        'あなたは親切なアシスタントです。簡潔に回答してください。',
+        message
+      );
+      setResponse(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予期せぬエラーが発生しました');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">AI機能テスト</h1>
+    <div className="max-w-2xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">OpenAI API テスト</h1>
       
-      <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1">
-            テーマ
+          <label htmlFor="message" className="block text-sm font-medium mb-2">
+            メッセージ
           </label>
-          <input
-            type="text"
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-            className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-            placeholder="テーマを入力"
+          <textarea
+            id="message"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full p-2 border rounded-md"
+            rows={4}
+            placeholder="メッセージを入力してください"
           />
         </div>
 
-        <button
-          onClick={handleTest}
-          disabled={loading}
-          className={`w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors
-            ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {loading ? '生成中...' : 'アウトライン生成'}
-        </button>
+        <div className="space-x-4">
+          <button
+            type="submit"
+            disabled={loading || !message}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+          >
+            送信
+          </button>
+          <button
+            type="button"
+            onClick={handleSystemPromptTest}
+            disabled={loading || !message}
+            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50"
+          >
+            システムプロンプトでテスト
+          </button>
+        </div>
+      </form>
 
-        {result && (
-          <div className="mt-4">
-            <h2 className="text-lg font-medium mb-2">生成結果</h2>
-            <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-auto">
-              {result}
-            </pre>
+      {loading && (
+        <div className="mt-4 text-gray-600">
+          応答を待っています...
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-md">
+          {error}
+        </div>
+      )}
+
+      {response && (
+        <div className="mt-4">
+          <h2 className="text-lg font-semibold mb-2">応答:</h2>
+          <div className="p-4 bg-gray-100 rounded-md whitespace-pre-wrap">
+            {response}
           </div>
-        )}
-      </div>
-
-      {toast && <Toast type={toast.type} message={toast.message} />}
+        </div>
+      )}
     </div>
   );
 } 

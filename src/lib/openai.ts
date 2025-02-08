@@ -1,16 +1,23 @@
 import { WritingTone } from '../types';
 
-const API_URL = 'http://localhost:3001/api/chat/completions';
+// APIエンドポイントの設定
+const API_URL = 'http://localhost:3000/api/chat/completions';
 
-async function callOpenAI(messages: any[]) {
+/**
+ * ChatGPTにメッセージを送信し、応答を取得する
+ * @param message ユーザーからのメッセージ
+ * @returns ChatGPTからの応答
+ */
+export async function sendChatMessage(message: string): Promise<string> {
   try {
-    console.log('Sending request to OpenAI API...');
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({
+        messages: [{ role: "user", content: message }]
+      }),
     });
 
     if (!response.ok) {
@@ -19,14 +26,53 @@ async function callOpenAI(messages: any[]) {
     }
 
     const data = await response.json();
-    console.log('API Response:', data);
     return data.choices[0].message.content;
   } catch (error) {
-    console.error('Error in callOpenAI:', error);
-    throw error;
+    console.error('OpenAI API Error:', error);
+    throw new Error('ChatGPTとの通信中にエラーが発生しました');
   }
 }
 
+/**
+ * システムプロンプトを含むチャット会話を送信する
+ * @param systemPrompt システムプロンプト
+ * @param userMessage ユーザーメッセージ
+ * @returns ChatGPTからの応答
+ */
+export async function sendChatMessageWithSystem(
+  systemPrompt: string,
+  userMessage: string
+): Promise<string> {
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'APIエラーが発生しました');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error('OpenAI API Error:', error);
+    throw new Error('ChatGPTとの通信中にエラーが発生しました');
+  }
+}
+
+/**
+ * ブログのアウトラインを生成する
+ */
 export async function generateBlogOutline(theme: string, tone: WritingTone) {
   try {
     const messages = [
@@ -54,14 +100,30 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
       }
     ];
 
-    const content = await callOpenAI(messages);
-    return content;
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'APIエラーが発生しました');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('アウトライン生成に失敗しました');
   }
 }
 
+/**
+ * セクションの内容を生成する
+ */
 export async function generateSectionContent(
   theme: string,
   sectionTitle: string,
@@ -87,8 +149,21 @@ export async function generateSectionContent(
       }
     ];
 
-    const content = await callOpenAI(messages);
-    return content;
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'APIエラーが発生しました');
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('セクション内容の生成に失敗しました');

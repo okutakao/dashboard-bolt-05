@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BlogPostForm } from './components/BlogPostForm';
 import { BlogPostList } from './components/BlogPostList';
 import { BlogPostDetail } from './components/BlogPostDetail';
@@ -10,6 +10,7 @@ import { useBlogPosts } from './hooks/useBlogPosts';
 import { AITest } from './components/AITest';
 import { Toast } from './components/Toast';
 import { ArrowLeft } from 'lucide-react';
+import { supabase } from './supabase';
 
 type AppView = 'list' | 'detail' | 'create' | 'edit';
 
@@ -19,6 +20,15 @@ function App() {
   const [view, setView] = useState<AppView>('list');
   const [selectedPost, setSelectedPost] = useState<BlogPost | undefined>();
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+
+  // 初期化時に自動ログアウト
+  useEffect(() => {
+    const clearSession = async () => {
+      await supabase.auth.signOut();
+      console.log('App: セッションをクリアしました');
+    };
+    clearSession();
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -42,7 +52,7 @@ function App() {
   const handleBack = () => {
     setView('list');
     setSelectedPost(undefined);
-    refreshPosts(); // 記事一覧を更新
+    refreshPosts();
   };
 
   const handleEditPost = (post: BlogPost) => {
@@ -52,17 +62,12 @@ function App() {
 
   const handleSavePost = async (post: BlogPost) => {
     setToast({ type: 'success', message: '記事を保存しました' });
-    await refreshPosts(); // 記事一覧を更新
-    handleBack(); // 記事一覧に戻る
+    await refreshPosts();
+    handleBack();
   };
 
-  React.useEffect(() => {
-    if (user) {
-      setToast({ type: 'success', message: `ようこそ、${user.email}さん` });
-    }
-  }, [user]);
-
-  if (loading || postsLoading) {
+  // ローディング中の表示
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -70,7 +75,9 @@ function App() {
     );
   }
 
+  // 未認証の場合はログインフォームを表示
   if (!user) {
+    console.log('未認証状態です。ログインフォームを表示します。');
     return <AuthForm />;
   }
 
@@ -81,62 +88,55 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <div className="container mx-auto">
-        {user ? (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                {view !== 'list' && (
-                  <button
-                    onClick={handleBack}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                  >
-                    <ArrowLeft className="h-5 w-5" />
-                    <span>戻る</span>
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-4">
-                <ThemeToggle />
-                <button
-                  onClick={handleSignOut}
-                  className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                >
-                  ログアウト
-                </button>
-              </div>
-            </div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            {view !== 'list' && (
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+              >
+                <ArrowLeft className="h-5 w-5" />
+                <span>戻る</span>
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <button
+              onClick={handleSignOut}
+              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+            >
+              ログアウト
+            </button>
+          </div>
+        </div>
 
-            <main className="container mx-auto px-4 py-8">
-              {/* テスト用コンポーネントを記事一覧の前に配置 */}
-              {view === 'list' && <AITest />}
+        <main className="container mx-auto px-4 py-8">
+          {view === 'list' && <AITest />}
 
-              {view === 'list' && (
-                <BlogPostList
-                  onSelectPost={handleSelectPost}
-                  onCreatePost={handleCreatePost}
-                />
-              )}
+          {view === 'list' && (
+            <BlogPostList
+              onSelectPost={handleSelectPost}
+              onCreatePost={handleCreatePost}
+            />
+          )}
 
-              {view === 'detail' && selectedPost && (
-                <BlogPostDetail
-                  post={selectedPost}
-                  onBack={handleBack}
-                  onEdit={handleEditPost}
-                />
-              )}
+          {view === 'detail' && selectedPost && (
+            <BlogPostDetail
+              post={selectedPost}
+              onBack={handleBack}
+              onEdit={handleEditPost}
+            />
+          )}
 
-              {(view === 'create' || view === 'edit') && (
-                <BlogPostForm
-                  post={view === 'edit' ? selectedPost : undefined}
-                  onSave={handleSavePost}
-                  onCancel={handleBack}
-                />
-              )}
-            </main>
-          </>
-        ) : (
-          <AuthForm />
-        )}
+          {(view === 'create' || view === 'edit') && (
+            <BlogPostForm
+              post={view === 'edit' ? selectedPost : undefined}
+              onSave={handleSavePost}
+              onCancel={handleBack}
+            />
+          )}
+        </main>
       </div>
       {toast && <Toast type={toast.type} message={toast.message} />}
     </div>
