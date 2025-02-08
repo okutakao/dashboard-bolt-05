@@ -1,7 +1,8 @@
 import React from 'react';
-import { ArrowLeft, Edit2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Download } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { Toast } from './Toast';
+import { downloadPost } from '../lib/exportUtils';
 
 type BlogPostDetailProps = {
   post: BlogPost;
@@ -22,6 +23,16 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
     });
   };
 
+  const handleDownload = () => {
+    try {
+      downloadPost(post);
+      setToast({ type: 'success', message: '記事をダウンロードしました' });
+    } catch (error) {
+      console.error('記事のダウンロード中にエラーが発生:', error);
+      setToast({ type: 'error', message: '記事のダウンロードに失敗しました' });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
@@ -40,6 +51,13 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
           >
             <Edit2 className="h-5 w-5" />
             <span>編集</span>
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
+            <Download className="h-5 w-5" />
+            <span>ダウンロード</span>
           </button>
         </div>
       </div>
