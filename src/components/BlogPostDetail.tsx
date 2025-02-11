@@ -23,6 +23,15 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
     });
   };
 
+  const formatTone = (tone: BlogPost['tone']) => {
+    const toneMap: Record<BlogPost['tone'], string> = {
+      casual: 'カジュアル',
+      business: 'ビジネス',
+      academic: 'アカデミック'
+    };
+    return toneMap[tone] || tone;
+  };
+
   const handleDownload = () => {
     try {
       downloadPost(post);
@@ -54,10 +63,11 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
           </button>
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 transition-colors"
+            title="マークダウンでエクスポート"
           >
             <Download className="h-5 w-5" />
-            <span>ダウンロード</span>
+            <span>エクスポート</span>
           </button>
         </div>
       </div>
@@ -70,7 +80,7 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
 
         <div className="mb-8">
           <h2 className="text-xl sm:text-2xl font-semibold mb-2">文体</h2>
-          <p className="text-gray-700 dark:text-gray-300 capitalize">{post.tone}</p>
+          <p className="text-gray-700 dark:text-gray-300">{formatTone(post.tone)}</p>
         </div>
 
         <div className="mb-8">
@@ -102,7 +112,7 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
         </div>
       </div>
 
-      {toast && <Toast type={toast.type} message={toast.message} />}
+      {toast && <Toast type={toast.type} message={toast.message} duration={3000} onClose={() => setToast(null)} />}
     </div>
   );
 }

@@ -41,8 +41,25 @@ export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
 
       console.log('Posts fetched successfully:', posts.length);
       return posts.map(post => ({
-        ...post,
-        sections: (post.sections || []).sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+        id: post.id,
+        userId: post.user_id,
+        title: post.title,
+        theme: post.theme,
+        tone: post.tone,
+        status: post.status,
+        createdAt: new Date(post.created_at).toISOString(),
+        updatedAt: new Date(post.updated_at).toISOString(),
+        sections: (post.sections || [])
+          .sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+          .map((section: any) => ({
+            id: section.id,
+            postId: section.post_id,
+            title: section.title,
+            content: section.content,
+            order: section.order,
+            createdAt: new Date(section.created_at).toISOString(),
+            updatedAt: new Date(section.updated_at).toISOString(),
+          }))
       }));
     } catch (error) {
       console.error(`Unexpected error in getBlogPosts (attempt ${retryCount + 1}/${maxRetries}):`, error);
@@ -83,7 +100,21 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
 }
 
 export async function createBlogPost(
-  post: Omit<BlogPost, 'id' | 'userId'> & { sections: Omit<BlogSection, 'id' | 'postId'>[] },
+  post: {
+    title: string;
+    theme: string;
+    tone: BlogPost['tone'];
+    status: BlogPost['status'];
+    createdAt: string;
+    updatedAt: string;
+    sections: Array<{
+      title: string;
+      content: string;
+      order: number;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  },
   userId: string
 ): Promise<BlogPost> {
   // トランザクションを使用して一貫性を保証
@@ -153,126 +184,99 @@ export async function createBlogPost(
     status: newPost.status,
     createdAt: newPost.created_at,
     updatedAt: newPost.updated_at,
-    sections: post.sections as BlogSection[]
+    sections: post.sections.map((section, index) => ({
+      id: '', // 一時的なIDを設定
+      postId: newPost.id,
+      title: section.title,
+      content: section.content,
+      order: section.order || index,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt
+    }))
   };
 }
 
-export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    throw new Error('認証が必要です');
+export async function updateBlogPost(
+  post: {
+    id: string;
+    userId: string;
+    title: string;
+    theme: string;
+    tone: BlogPost['tone'];
+    status: BlogPost['status'];
+    createdAt: string;
+    updatedAt: string;
+    sections: Array<{
+      id?: string;
+      postId?: string;
+      title: string;
+      content: string;
+      order: number;
+      createdAt: string;
+      updatedAt: string;
+    }>;
   }
+): Promise<BlogPost> {
+  const { data: updatedPost, error: updateError } = await supabase
+    .from('blog_posts')
+    .update({
+      title: post.title,
+      theme: post.theme,
+      tone: post.tone,
+      status: post.status,
+      updated_at: post.updatedAt
+    })
+    .eq('id', post.id)
+    .eq('user_id', post.userId)
+    .select()
+    .single();
 
-  try {
-    // 1. 記事の基本情報を更新
-    const { error: postError } = await supabase
-      .from('blog_posts')
-      .update({
-        title: post.title,
-        theme: post.theme,
-        tone: post.tone,
-        status: post.status,
-        updated_at: post.updatedAt
-      })
-      .eq('id', post.id);
+  if (updateError) throw updateError;
+  if (!updatedPost) throw new Error('Failed to update blog post');
 
-    if (postError) {
-      throw postError;
-    }
+  // 既存のセクションを削除
+  const { error: deleteError } = await supabase
+    .from('blog_sections')
+    .delete()
+    .eq('post_id', post.id);
 
-    // 2. 現在のセクションを取得
-    const { data: currentSections, error: fetchError } = await supabase
-      .from('blog_sections')
-      .select('*')
-      .eq('post_id', post.id);
+  if (deleteError) throw deleteError;
 
-    if (fetchError) {
-      throw fetchError;
-    }
-
-    // 3. セクションの更新処理
-    const now = new Date().toISOString();
-    
-    // 3.1 既存のセクションを更新または削除
-    const currentSectionIds = new Set(currentSections.map(s => s.id));
-    const updatedSectionIds = new Set(post.sections.filter((s): s is BlogSection => 'id' in s).map(s => s.id));
-    
-    // 削除するセクション
-    const sectionsToDelete = currentSections.filter(s => !updatedSectionIds.has(s.id));
-    if (sectionsToDelete.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('blog_sections')
-        .delete()
-        .in('id', sectionsToDelete.map(s => s.id));
-
-      if (deleteError) {
-        throw deleteError;
-      }
-    }
-
-    // 更新するセクション
-    const sectionsToUpdate = post.sections.filter((s): s is BlogSection => 'id' in s && currentSectionIds.has(s.id));
-    for (const section of sectionsToUpdate) {
-      const { error: updateError } = await supabase
-        .from('blog_sections')
-        .update({
-          title: section.title,
-          content: section.content,
-          order: section.order,
-          updated_at: now
-        })
-        .eq('id', section.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-    }
-
-    // 3.2 新しいセクションを作成
-    const newSections = post.sections
-      .filter((s): s is NewBlogSection => !('id' in s))
-      .map(section => ({
+  // 新しいセクションを作成
+  const { error: sectionsError } = await supabase
+    .from('blog_sections')
+    .insert(
+      post.sections.map((section, index) => ({
         post_id: post.id,
         title: section.title,
         content: section.content,
-        order: section.order,
-        created_at: now,
-        updated_at: now
-      }));
+        order: section.order || index,
+        created_at: section.createdAt,
+        updated_at: section.updatedAt
+      }))
+    );
 
-    if (newSections.length > 0) {
-      const { error: insertError } = await supabase
-        .from('blog_sections')
-        .insert(newSections);
+  if (sectionsError) throw sectionsError;
 
-      if (insertError) {
-        throw insertError;
-      }
-    }
-
-    // 4. 更新された記事とセクションを取得
-    const { data: updatedPost, error: finalError } = await supabase
-      .from('blog_posts')
-      .select(`
-        *,
-        sections:blog_sections(*)
-      `)
-      .eq('id', post.id)
-      .single();
-
-    if (finalError) {
-      throw finalError;
-    }
-
-    return {
-      ...updatedPost,
-      sections: updatedPost.sections.sort((a: BlogSection, b: BlogSection) => a.order - b.order)
-    };
-
-  } catch (error) {
-    console.error('記事更新中のエラー:', error);
-    throw new Error('記事の更新に失敗しました');
-  }
+  return {
+    id: updatedPost.id,
+    userId: updatedPost.user_id,
+    title: updatedPost.title,
+    theme: updatedPost.theme,
+    tone: updatedPost.tone,
+    status: updatedPost.status,
+    createdAt: updatedPost.created_at,
+    updatedAt: updatedPost.updated_at,
+    sections: post.sections.map((section, index) => ({
+      id: '', // 一時的なIDを設定
+      postId: updatedPost.id,
+      title: section.title,
+      content: section.content,
+      order: section.order || index,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt
+    }))
+  };
 }
 
 export async function deleteBlogPost(id: string, userId: string): Promise<void> {

@@ -14,6 +14,22 @@ type BlogPostFormProps = {
   onCancel: () => void;
 };
 
+type FormData = {
+  title: string;
+  theme: string;
+  tone: BlogPost['tone'];
+  status: BlogPost['status'];
+  createdAt: string;
+  updatedAt: string;
+  sections: Array<{
+    title: string;
+    content: string;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
 const defaultSection: FormSection = {
   title: '',
   content: '',
@@ -90,18 +106,29 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!user) {
       setToast({ type: 'error', message: 'ログインが必要です' });
       return;
     }
 
-    if (!validateForm()) {
-      setToast({ type: 'error', message: '入力内容を確認してください' });
+    if (!title.trim()) {
+      setErrors(prev => ({ ...prev, title: 'タイトルは必須です' }));
+      return;
+    }
+
+    if (!theme.trim()) {
+      setErrors(prev => ({ ...prev, theme: 'テーマは必須です' }));
+      return;
+    }
+
+    if (sections.length === 0) {
+      setErrors(prev => ({ ...prev, sections: '少なくとも1つのセクションが必要です' }));
       return;
     }
 
     setIsSubmitting(true);
+    setErrors({});
 
     try {
       const now = new Date().toISOString();
@@ -110,43 +137,28 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         // 更新の場合
         const updatedPost = await updateBlogPost({
           id: post.id,
-          userId: post.userId,
+          userId: user.id,
           title,
           theme,
           tone,
           status: post.status,
           createdAt: post.createdAt,
           updatedAt: now,
-          sections: sections.map((section, index) => {
-            if (section.id) {
-              // 既存のセクション
-              return {
-                id: section.id,
-                postId: post.id,
-                title: section.title,
-                content: section.content,
-                order: index,
-                createdAt: section.createdAt,
-                updatedAt: now
-              } as BlogSection;
-            } else {
-              // 新規セクション
-              return {
-                postId: post.id,
-                title: section.title,
-                content: section.content,
-                order: index,
-                createdAt: now,
-                updatedAt: now
-              } as FormSection;
-            }
-          })
+          sections: sections.map((section, index) => ({
+            id: section.id,
+            postId: section.postId,
+            title: section.title,
+            content: section.content,
+            order: index,
+            createdAt: section.createdAt,
+            updatedAt: now
+          }))
         });
         setToast({ type: 'success', message: '記事を更新しました' });
         onSave(updatedPost);
       } else {
         // 新規作成の場合
-        const newPost = await createBlogPost({
+        const formData: FormData = {
           title,
           theme,
           tone,
@@ -159,8 +171,9 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             order: index,
             createdAt: now,
             updatedAt: now
-          } as FormSection))
-        }, user.id);
+          }))
+        };
+        const newPost = await createBlogPost(formData, user.id);
         setToast({ type: 'success', message: '記事を作成しました' });
         onSave(newPost);
       }
@@ -208,6 +221,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         // 既存の下書きを更新
         const updatedPost = await updateBlogPost({
           id: draftId,
+          userId: user.id,
           title,
           theme,
           tone,
@@ -255,7 +269,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             updatedAt: now
           }))
         }, user.id);
-        setDraftId(newPost.id); // 新規作成後にIDを保存
+        setDraftId(newPost.id);
         setLastSaved(new Date());
       }
     } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BlogPostForm } from './components/BlogPostForm';
 import { BlogPostList } from './components/BlogPostList';
 import { BlogPostDetail } from './components/BlogPostDetail';
@@ -19,6 +19,11 @@ function App() {
   const [view, setView] = useState<AppView>('list');
   const [selectedPost, setSelectedPost] = useState<BlogPost | undefined>();
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+
+  // 認証状態が変更されたときにトーストをクリア
+  useEffect(() => {
+    setToast(null);
+  }, [user]);
 
   const handleSignOut = async () => {
     try {
@@ -126,7 +131,14 @@ function App() {
           )}
         </main>
       </div>
-      {toast && <Toast type={toast.type} message={toast.message} />}
+      {toast && (
+        <Toast 
+          type={toast.type} 
+          message={toast.message} 
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

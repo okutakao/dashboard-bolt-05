@@ -19,23 +19,38 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
   const [toast, setToast] = React.useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   const formatDate = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return date.toLocaleTimeString('ja-JP', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } else if (diffDays < 7) {
-      return `${diffDays}日前`;
-    } else {
-      return date.toLocaleDateString('ja-JP', {
-        month: 'short',
-        day: 'numeric'
-      });
+    try {
+      const now = new Date();
+      const date = new Date(dateString);
+      
+      // 日付が不正な場合は早期リターン
+      if (isNaN(date.getTime())) {
+        return '日付なし';
+      }
+
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        // 今日の場合は時刻を表示
+        return date.toLocaleTimeString('ja-JP', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } else if (diffDays < 7) {
+        // 1週間以内の場合は「〇日前」
+        return `${diffDays}日前`;
+      } else {
+        // それ以外は日付を表示
+        return date.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+    } catch (error) {
+      console.error('日付のフォーマットエラー:', error);
+      return '日付なし';
     }
   };
 
@@ -192,6 +207,15 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
     }
   };
 
+  const formatTone = (tone: BlogPost['tone']) => {
+    const toneMap: Record<BlogPost['tone'], string> = {
+      casual: 'カジュアル',
+      business: 'ビジネス',
+      academic: 'アカデミック'
+    };
+    return toneMap[tone] || tone;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       <div className="p-6">
@@ -199,7 +223,7 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
           <Clock className="h-4 w-4" />
           <span>{formatDate(post.updatedAt)}</span>
           <Tag className="h-4 w-4 ml-2" />
-          <span className="capitalize">{post.tone}</span>
+          <span>{formatTone(post.tone)}</span>
         </div>
         <h2 className="text-xl font-semibold mb-2 line-clamp-2">
           {post.title}
