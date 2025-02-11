@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { supabase } from '../supabase';
 
 interface AuthContextType {
   session: Session | null;
@@ -15,33 +16,38 @@ const AuthContext = createContext<AuthContextType>({
   error: null
 });
 
-// モックユーザーデータ
-const mockUser: User = {
-  id: 'mock-user-id',
-  email: 'test@example.com',
-  role: 'authenticated',
-  aud: 'authenticated',
-  created_at: new Date().toISOString(),
-  app_metadata: {},
-  user_metadata: {},
-  identities: []
-};
-
-// モックセッションデータ
-const mockSession: Session = {
-  access_token: 'mock-access-token',
-  token_type: 'bearer',
-  expires_in: 3600,
-  refresh_token: 'mock-refresh-token',
-  user: mockUser,
-  expires_at: Math.floor(Date.now() / 1000) + 3600
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session] = useState<Session | null>(mockSession);
-  const [user] = useState<User | null>(mockUser);
-  const [loading] = useState(false);
-  const [error] = useState<Error | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    // 現在のセッションを取得
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('セッション取得エラー:', error);
+        setError(error);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+      setLoading(false);
+    });
+
+    // 認証状態の変更を監視
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('認証状態が変更されました:', _event);
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // クリーンアップ関数
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
     <AuthContext.Provider value={{ session, user, loading, error }}>
