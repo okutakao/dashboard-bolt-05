@@ -34,29 +34,39 @@ check_server() {
 
 # 既存のプロセスを停止
 echo "既存のプロセスを停止中..."
-kill_process 3000
-kill_process 5173
+pkill -f "node server.js" || true
+pkill -f "vite" || true
 
-# 少し待機
+# 少し待機して、ポートが解放されるのを待つ
 sleep 2
 
 # バックエンドサーバーを起動
 echo "バックエンドサーバーを起動中..."
-node server.js > server.log 2>&1 &
+NODE_ENV=development node server.js &
 backend_pid=$!
 
 # バックエンドサーバーの起動を待機
 echo "バックエンドサーバーの起動を待機中..."
-if check_server 3000; then
-    echo "バックエンドサーバーが正常に起動しました"
-else
-    echo "バックエンドサーバーの起動に失敗しました"
-    exit 1
-fi
+for i in {1..30}; do
+  if nc -z localhost 3000; then
+    echo "バックエンドサーバーが起動しました"
+    break
+  fi
+  echo "サーバー(ポート:3000)の起動を待機中... 試行回数: $i/30"
+  sleep 1
+done
 
 # フロントエンドサーバーを起動
 echo "フロントエンドサーバーを起動中..."
-npm run dev
+npm run dev &
+frontend_pid=$!
+
+# プロセスIDを保存
+echo $backend_pid > .backend.pid
+echo $frontend_pid > .frontend.pid
+
+# プロセスが終了しないように待機
+wait $backend_pid $frontend_pid
 
 # エラーハンドリング
 trap 'kill_process 3000; kill_process 5173' EXIT 

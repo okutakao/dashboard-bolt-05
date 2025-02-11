@@ -1,11 +1,12 @@
 import React from 'react';
-import { FileText, Edit2, Trash2, Clock, Tag, Save } from 'lucide-react';
+import { FileText, Edit2, Trash2, Clock, Tag, Save, Download } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { useBlogPosts } from '../hooks/useBlogPosts';
 import { deleteBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
 import { BlogPostStatusToggle } from './BlogPostStatusToggle';
+import { downloadPost } from '../lib/exportUtils';
 
 type BlogPostListProps = {
   onSelectPost: (post: BlogPost) => void;
@@ -182,6 +183,15 @@ type PostCardProps = {
 };
 
 function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: PostCardProps) {
+  const handleExport = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      downloadPost(post);
+    } catch (error) {
+      console.error('記事のエクスポート中にエラーが発生:', error);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       <div className="p-6">
@@ -203,6 +213,13 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
             onStatusChange={onStatusChange}
           />
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="p-2 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 transition-colors"
+              title="マークダウンでエクスポート"
+            >
+              <Download className="h-5 w-5" />
+            </button>
             <button
               onClick={() => onSelect(post)}
               className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"

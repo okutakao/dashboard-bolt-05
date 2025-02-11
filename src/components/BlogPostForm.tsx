@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText } from 'lucide-react';
+import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText, Download } from 'lucide-react';
 import { BlogPost, BlogSection, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
 import { BlogPostPreview } from './BlogPostPreview';
 import debounce from 'lodash/debounce';
+import { downloadPost } from '../lib/exportUtils';
 
 type BlogPostFormProps = {
   post?: BlogPost;
@@ -457,29 +458,69 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     }
   };
 
+  const handleExport = () => {
+    try {
+      const postData = {
+        id: post?.id || 'draft',
+        userId: user?.id || 'draft',
+        title,
+        theme,
+        tone,
+        status: 'draft' as const,
+        createdAt: post?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sections: sections.map((section, index) => ({
+          id: section.id || `temp-${index}`,
+          postId: post?.id || 'draft',
+          title: section.title,
+          content: section.content,
+          order: index,
+          createdAt: section.createdAt || new Date().toISOString(),
+          updatedAt: section.updatedAt || new Date().toISOString()
+        }))
+      } satisfies BlogPost;
+      
+      downloadPost(postData);
+    } catch (error) {
+      console.error('記事のエクスポート中にエラー:', error);
+      setToast({ type: 'error', message: 'エクスポートに失敗しました' });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between mb-4 space-y-4 sm:space-y-0">
         <div className="text-sm text-gray-500">
           {lastSaved && `最終保存: ${lastSaved.toLocaleString()}`}
         </div>
-        <button
-          type="button"
-          onClick={() => setIsPreviewMode(!isPreviewMode)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-        >
-          {isPreviewMode ? (
-            <>
-              <Edit className="h-5 w-5" />
-              <span>編集モード</span>
-            </>
-          ) : (
-            <>
-              <Eye className="h-5 w-5" />
-              <span>プレビュー</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 transition-colors"
+            title="マークダウンでエクスポート"
+          >
+            <Download className="h-5 w-5" />
+            <span>エクスポート</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
+            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+          >
+            {isPreviewMode ? (
+              <>
+                <Edit className="h-5 w-5" />
+                <span>編集モード</span>
+              </>
+            ) : (
+              <>
+                <Eye className="h-5 w-5" />
+                <span>プレビュー</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {isPreviewMode ? (

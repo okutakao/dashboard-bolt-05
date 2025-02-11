@@ -2,24 +2,59 @@ import { supabase } from '../../supabase';
 import { BlogPost, BlogSection, NewBlogPost, UpdateBlogPost, NewBlogSection } from '../models';
 
 export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
-  const { data: posts, error } = await supabase
-    .from('blog_posts')
-    .select(`
-      *,
-      sections:blog_sections(*)
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching blog posts:', error);
-    throw new Error('記事の取得に失敗しました');
+  console.log('getBlogPosts called with userId:', userId);
+  
+  if (!userId) {
+    console.error('User ID is required');
+    return [];
   }
 
-  return posts.map(post => ({
-    ...post,
-    sections: post.sections.sort((a: BlogSection, b: BlogSection) => a.order - b.order)
-  }));
+  const maxRetries = 3;
+  let retryCount = 0;
+
+  while (retryCount < maxRetries) {
+    try {
+      console.log(`Fetching posts from Supabase... (attempt ${retryCount + 1}/${maxRetries})`);
+      const { data: posts, error } = await supabase
+        .from('blog_posts')
+        .select(`
+          *,
+          sections:blog_sections(*)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching blog posts:', error);
+        if (retryCount === maxRetries - 1) {
+          return [];
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount))); // 指数バックオフ
+        continue;
+      }
+
+      if (!posts) {
+        console.log('No posts found');
+        return [];
+      }
+
+      console.log('Posts fetched successfully:', posts.length);
+      return posts.map(post => ({
+        ...post,
+        sections: (post.sections || []).sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+      }));
+    } catch (error) {
+      console.error(`Unexpected error in getBlogPosts (attempt ${retryCount + 1}/${maxRetries}):`, error);
+      if (retryCount === maxRetries - 1) {
+        return [];
+      }
+      retryCount++;
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount))); // 指数バックオフ
+    }
+  }
+
+  return []; // 全ての再試行が失敗した場合
 }
 
 export async function getBlogPost(id: string, userId: string): Promise<BlogPost | null> {
