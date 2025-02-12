@@ -409,21 +409,15 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     console.log('新しいセクション:', newSections);
     setSections(newSections);
     setGeneratedOutline(null);
+    setIsGeneratingContent(false); // 常にfalseに設定
+
     setToast({ type: 'success', message: '記事構成を適用しました' });
-    
-    // デバッグ用：状態を確認
-    console.log('構成適用後の状態:', {
-      title,
-      theme,
-      sections: newSections,
-      generatedOutline: null
-    });
   };
 
-  // 記事本文生成関数を追加
+  // 記事本文生成関数を修正
   const generateContent = async () => {
-    if (!title || !theme || (!generatedOutline && sections.length === 0)) {
-      setToast({ type: 'error', message: 'タイトル、テーマ、記事構成が必要です' });
+    if (!theme || sections.length === 0) {
+      setToast({ type: 'error', message: 'テーマと記事構成が必要です' });
       return;
     }
 
@@ -434,6 +428,13 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         description: section.content,
         recommendedLength: '500文字程度'
       }));
+
+      console.log('本文生成リクエスト:', {
+        title,
+        theme,
+        tone,
+        sections: currentSections
+      });
 
       const response = await fetch(`${API_BASE_URL}/api/generate-content`, {
         method: 'POST',
@@ -458,6 +459,8 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       }
 
       const data = await response.json();
+      console.log('生成された本文:', data);
+      
       setSections(data.sections.map((section: any, index: number) => ({
         title: section.title,
         content: section.content,
@@ -465,6 +468,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })));
+      
       setToast({ type: 'success', message: '記事本文を生成しました' });
     } catch (error) {
       console.error('記事本文生成エラー:', error);
@@ -656,7 +660,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             <button
               type="button"
               onClick={generateContent}
-              disabled={isGeneratingContent || !title || !theme || (!generatedOutline && sections.length === 0)}
+              disabled={isGeneratingContent || !theme || sections.length === 0}
               className="px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isGeneratingContent ? (

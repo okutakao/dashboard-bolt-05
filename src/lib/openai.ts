@@ -1,7 +1,11 @@
 import { WritingTone } from '../types';
+import { createClient } from '@supabase/supabase-js';
 
-// APIエンドポイントの設定
-const API_URL = 'http://localhost:3000/api/chat/completions';
+// Supabaseクライアントの初期化
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 /**
  * ChatGPTにメッセージを送信し、応答を取得する
@@ -10,23 +14,14 @@ const API_URL = 'http://localhost:3000/api/chat/completions';
  */
 export async function sendChatMessage(message: string): Promise<string> {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: {
         messages: [{ role: "user", content: message }]
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'APIエラーが発生しました');
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
+    if (error) throw error;
+    return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
     throw new Error('ChatGPTとの通信中にエラーが発生しました');
@@ -44,26 +39,17 @@ export async function sendChatMessageWithSystem(
   userMessage: string
 ): Promise<string> {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage }
         ]
-      }),
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'APIエラーが発生しました');
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
+    if (error) throw error;
+    return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
     throw new Error('ChatGPTとの通信中にエラーが発生しました');
@@ -100,21 +86,12 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
       }
     ];
 
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages }),
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: { messages }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'APIエラーが発生しました');
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
+    if (error) throw error;
+    return data.content;
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('アウトライン生成に失敗しました');
@@ -149,21 +126,12 @@ export async function generateSectionContent(
       }
     ];
 
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages }),
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: { messages }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'APIエラーが発生しました');
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
+    if (error) throw error;
+    return data.content;
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('セクション内容の生成に失敗しました');
@@ -191,12 +159,35 @@ export async function generateArticleContent(
     try {
       console.log(`セクション ${currentSection}/${totalSections}「${section.title}」の生成を開始...`);
       
-      // セクションの内容を生成
-      const content = await generateSectionContent(theme, section.title, tone);
+      const messages = [
+        {
+          role: "system",
+          content: `あなたはブログ記事のセクション内容を生成するアシスタントです。
+以下の条件に従って内容を生成してください：
+- 文体は${tone}を使用
+- マークダウン形式で出力
+- 300-500文字程度
+- 具体例や説明を含める
+- 読みやすく、わかりやすい文章を心がける`
+        },
+        {
+          role: "user",
+          content: `タイトル: ${title}
+テーマ: ${theme}
+セクションタイトル: ${section.title}
+上記の情報に基づいて、セクションの内容を生成してください。`
+        }
+      ];
+
+      const { data, error } = await supabase.functions.invoke('openai', {
+        body: { messages }
+      });
+
+      if (error) throw error;
       
       generatedSections.push({
         title: section.title,
-        content: content
+        content: data.content
       });
 
       console.log(`セクション ${currentSection}/${totalSections} の生成が完了しました`);
@@ -209,7 +200,7 @@ export async function generateArticleContent(
 
       currentSection++;
 
-    } catch (error: any) {  // エラーの型を明示的に指定
+    } catch (error: any) {
       console.error(`セクション「${section.title}」の生成中にエラーが発生しました:`, error);
       errors.push({
         sectionTitle: section.title,
