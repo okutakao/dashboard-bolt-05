@@ -38,6 +38,8 @@ const defaultSection: FormSection = {
   updatedAt: new Date().toISOString(),
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const { user } = useAuth();
   const [title, setTitle] = useState(post?.title || '');
@@ -310,7 +312,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     setIsGeneratingTitle(true);
     try {
-      const response = await fetch('http://localhost:3000/api/generate-title', {
+      const response = await fetch(`${API_BASE_URL}/api/generate-title`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -357,7 +359,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setIsGeneratingOutline(true);
     try {
       console.log('記事構成生成開始:', { theme, tone });
-      const response = await fetch('http://localhost:3000/api/generate-outline', {
+      const response = await fetch(`${API_BASE_URL}/api/generate-outline`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +435,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         recommendedLength: '500文字程度'
       }));
 
-      const response = await fetch('http://localhost:3000/api/generate-content', {
+      const response = await fetch(`${API_BASE_URL}/api/generate-content`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

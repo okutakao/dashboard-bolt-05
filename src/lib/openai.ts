@@ -1,7 +1,7 @@
 import { WritingTone } from '../types';
 
 // APIエンドポイントの設定
-const API_URL = 'http://localhost:3000/api/chat/completions';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/chat/completions';
 
 /**
  * ChatGPTにメッセージを送信し、応答を取得する

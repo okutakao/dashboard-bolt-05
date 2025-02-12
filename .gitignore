@@ -32,3 +32,4 @@ env_backup/
 
 # Process ID files
 .*.pid
+.vercel

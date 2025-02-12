@@ -68,8 +68,12 @@ const app = express();
 // CORSの設定
 app.use(cors({
   origin: function(origin, callback) {
-    // 開発環境からのリクエストをすべて許可
-    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+    // 開発環境とVercelのデプロイURLを許可
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://dashboard-bolt-05-q5nyzw0st-okutakaos-projects.vercel.app'
+    ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
