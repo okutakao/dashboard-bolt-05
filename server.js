@@ -346,7 +346,7 @@ app.post('/api/generate-outline', async (req, res) => {
     const messages = [
       {
         role: "system",
-        content: "あなたはブログ記事の構成を提案する専門家です。読者が理解しやすく、SEOに効果的な記事構成を提案してください。"
+        content: "あなたはブログ記事の構成を提案する専門家です。以下の条件に従って提案してください：\n1. すべての出力を日本語で行う\n2. セクションタイトルは必ず日本語で記載\n3. 読者が理解しやすい構成\n4. SEOに効果的な構成"
       },
       {
         role: "user",
@@ -358,7 +358,7 @@ app.post('/api/generate-outline', async (req, res) => {
 条件：
 - 読者が理解しやすい流れ
 - SEOを意識した構成
-- 3〜5個のセクション
+- 3〜5個のセクション（日本語でタイトルをつける）
 - 各セクションに推奨文字数
 - 具体的で実用的な内容
 
@@ -366,14 +366,14 @@ app.post('/api/generate-outline', async (req, res) => {
 {
   "sections": [
     {
-      "title": "セクションタイトル",
-      "description": "セクションの説明",
-      "recommendedLength": "推奨文字数"
+      "title": "（日本語でセクションタイトル）",
+      "description": "（日本語でセクションの説明）",
+      "recommendedLength": "（推奨文字数）"
     }
   ],
-  "estimatedReadingTime": "推定読了時間",
-  "targetAudience": "想定読者",
-  "keywords": ["キーワード1", "キーワード2", ...]
+  "estimatedReadingTime": "（推定読了時間）",
+  "targetAudience": "（想定読者）",
+  "keywords": ["（日本語でキーワード）"]
 }`
       }
     ];
@@ -425,75 +425,65 @@ app.post('/api/generate-content', async (req, res) => {
 
     console.log('記事本文生成リクエストを受信:', { title, theme, tone });
     
-    const messages = [
-      {
-        role: "system",
-        content: "あなたは専門的な記事ライターです。与えられたテーマとアウトラインに基づいて、読者を惹きつける記事を生成してください。"
-      },
-      {
-        role: "user",
-        content: `以下の条件で記事を生成してください：
+    // セクションごとに逐次処理を行う
+    const generatedSections = [];
+    for (const section of outline.sections) {
+      const messages = [
+        {
+          role: "system",
+          content: "あなたは専門的な記事ライターです。与えられたテーマとセクションに基づいて、読者を惹きつける記事を生成してください。"
+        },
+        {
+          role: "user",
+          content: `以下の条件でセクションの内容を生成してください：
 
 タイトル: ${title}
 テーマ: ${theme}
+セクション: ${section.title}
 文体: ${tone || 'カジュアル'}
-アウトライン:
-${JSON.stringify(outline, null, 2)}
 
 条件：
-- 各セクションの推奨文字数に従う
+- 推奨文字数: ${section.recommendedLength || '400-600文字'}
 - ${tone === 'casual' ? 'カジュアルで親しみやすい文体' : tone === 'business' ? 'ビジネス向けの簡潔で明確な文体' : '学術的で客観的な文体'}を使用
 - 読者の興味を引く具体例を含める
-- 文章は自然で読みやすくする
-- 各セクションの内容は前後のセクションと自然に繋がるようにする
+- 文章は自然で読みやすくする`
+        }
+      ];
 
-形式：
-{
-  "sections": [
-    {
-      "title": "セクションタイトル",
-      "content": "セクションの内容"
-    }
-  ]
-}`
+      const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1000,
+          n: 1,
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`セクション内容生成に失敗: ${errorData.error?.message || response.statusText}`);
       }
-    ];
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 2000,
-        n: 1,
-        stream: false
-      })
-    });
+      const data = await response.json();
+      generatedSections.push({
+        title: section.title,
+        content: data.choices[0].message.content
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`記事本文生成に失敗: ${errorData.error?.message || response.statusText}`);
+      // セクション間に少し待機時間を入れる
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    const data = await response.json();
-    console.log('記事本文生成成功');
+    console.log('全セクションの生成が完了');
+    res.json({ sections: generatedSections });
     
-    try {
-      // 制御文字を除去してからJSONをパース
-      const cleanContent = data.choices[0].message.content.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
-      console.log('生成されたコンテンツ:', cleanContent);
-      const generatedContent = JSON.parse(cleanContent);
-      res.json(generatedContent);
-    } catch (parseError) {
-      console.error('JSONパースエラー:', parseError);
-      console.error('生のコンテンツ:', data.choices[0].message.content);
-      throw new Error('生成されたコンテンツの形式が不正です');
-    }
   } catch (error) {
     console.error('Error in /api/generate-content:', error);
     res.status(500).json({ 

@@ -170,6 +170,72 @@ export async function generateSectionContent(
   }
 }
 
+/**
+ * 記事全体を生成する（セクションごとに分割して生成）
+ */
+export async function generateArticleContent(
+  title: string,
+  theme: string,
+  sections: Array<{ title: string }>,
+  tone: WritingTone
+) {
+  const generatedSections = [];
+  const errors = [];
+  let currentSection = 1;
+  const totalSections = sections.length;
+
+  console.log(`記事「${title}」の生成を開始します（全${totalSections}セクション）`);
+
+  // 各セクションを順番に生成
+  for (const section of sections) {
+    try {
+      console.log(`セクション ${currentSection}/${totalSections}「${section.title}」の生成を開始...`);
+      
+      // セクションの内容を生成
+      const content = await generateSectionContent(theme, section.title, tone);
+      
+      generatedSections.push({
+        title: section.title,
+        content: content
+      });
+
+      console.log(`セクション ${currentSection}/${totalSections} の生成が完了しました`);
+      
+      // セクション間に少し待機時間を入れる（APIの負荷を考慮）
+      if (currentSection < totalSections) {
+        console.log('次のセクションの生成まで少々お待ちください...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      currentSection++;
+
+    } catch (error: any) {  // エラーの型を明示的に指定
+      console.error(`セクション「${section.title}」の生成中にエラーが発生しました:`, error);
+      errors.push({
+        sectionTitle: section.title,
+        error: error.message || '不明なエラーが発生しました'
+      });
+    }
+  }
+
+  // エラーがあった場合の処理
+  if (errors.length > 0) {
+    const errorMessage = `以下のセクションの生成に失敗しました：\n${
+      errors.map(e => `- ${e.sectionTitle}: ${e.error}`).join('\n')
+    }`;
+    console.error(errorMessage);
+    throw new Error(errorMessage);
+  }
+
+  console.log(`記事「${title}」の全セクション（${totalSections}個）の生成が完了しました`);
+
+  return {
+    title,
+    theme,
+    sections: generatedSections
+  };
+}
+
 // レスポンスの型定義
 export interface GeneratedOutline {
   sections: {
