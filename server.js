@@ -116,15 +116,22 @@ const getHealthStatus = () => ({
   memory: process.memoryUsage()
 });
 
-// 定期的なヘルスチェック
+// リクエストタイムアウトの設定
+const TIMEOUT = 60000; // 60秒に延長
+
+// メモリ使用量の警告しきい値を調整
 setInterval(() => {
   const status = getHealthStatus();
   console.log('Health Check:', status);
   
-  // メモリ使用量が高い場合は警告
+  // メモリ使用量が高い場合は警告とガベージコレクションを実行
   const memoryUsagePercent = (status.memory.heapUsed / status.memory.heapTotal) * 100;
-  if (memoryUsagePercent > 80) {
+  if (memoryUsagePercent > 70) {
     console.warn(`High memory usage: ${memoryUsagePercent.toFixed(2)}%`);
+    if (global.gc) {
+      global.gc();
+      console.log('Garbage collection executed');
+    }
   }
 }, 60000); // 1分ごとにチェック
 
@@ -149,8 +156,28 @@ const handleError = (error, req) => {
   }, 300000);
 };
 
-// リクエストタイムアウトの設定
-const TIMEOUT = 30000; // 30秒
+// リトライ設定
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2秒
+
+// リトライ可能なfetchラッパー関数
+async function fetchWithRetry(url, options, retryCount = 0) {
+  try {
+    const response = await fetchWithTimeout(url, options);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`APIリクエストが失敗: ${errorData.error?.message || response.statusText}`);
+    }
+    return response;
+  } catch (error) {
+    if (retryCount < MAX_RETRIES && (error.type === 'aborted' || error.name === 'AbortError')) {
+      console.log(`リトライ ${retryCount + 1}/${MAX_RETRIES}...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return fetchWithRetry(url, options, retryCount + 1);
+    }
+    throw error;
+  }
+}
 
 // タイムアウト付きのfetchラッパー関数
 async function fetchWithTimeout(url, options) {
@@ -382,7 +409,7 @@ app.post('/api/generate-outline', async (req, res) => {
       }
     ];
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -398,11 +425,6 @@ app.post('/api/generate-outline', async (req, res) => {
       })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`記事構成生成に失敗: ${errorData.error?.message || response.statusText}`);
-    }
-
     const data = await response.json();
     console.log('記事構成生成成功');
     
@@ -413,7 +435,8 @@ app.post('/api/generate-outline', async (req, res) => {
     console.error('Error in /api/generate-outline:', error);
     res.status(500).json({ 
       error: '記事構成生成エラー',
-      details: error.message
+      details: error.message,
+      retryable: error.type === 'aborted' || error.name === 'AbortError'
     });
   }
 });
@@ -512,15 +535,20 @@ const PORT = process.env.PORT || 3000;
 // サーバーの起動処理の改善
 const startServer = () => {
   try {
+    // メモリリークを防ぐためのガベージコレクションを有効化
+    if (process.env.NODE_ENV === 'development') {
+      process.env.NODE_OPTIONS = '--expose-gc';
+    }
+
     server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
       console.log('Environment variables:');
       console.log('- OPENAI_API_KEY:', apiKey ? `設定されています (${apiKey.substring(0, 10)}...)` : '設定されていません');
     });
 
-    // Keep-Alive接続のタイムアウト設定
-    server.keepAliveTimeout = 65000;
-    server.headersTimeout = 66000;
+    // Keep-Alive接続のタイムアウト設定を調整
+    server.keepAliveTimeout = 120000; // 120秒
+    server.headersTimeout = 121000; // keepAliveTimeout + 1000ms
 
     return server;
   } catch (error) {
