@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // Edge Functions URLの設定
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc`;
 
 /**
  * OpenAI APIを呼び出す共通関数
@@ -22,12 +22,14 @@ async function callOpenAIFunction(messages: any[]) {
   try {
     console.log('Calling OpenAI Function with URL:', FUNCTIONS_URL);
     console.log('Messages:', messages);
+    console.log('Using Anon Key:', import.meta.env.VITE_SUPABASE_ANON_KEY);
 
     const response = await fetch(`${FUNCTIONS_URL}/openai`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
       body: JSON.stringify({ messages })
     });
