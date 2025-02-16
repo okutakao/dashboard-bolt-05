@@ -19,23 +19,32 @@ const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
  * OpenAI APIを呼び出す共通関数
  */
 async function callOpenAIFunction(messages: any[]) {
-  const response = await fetch(`${FUNCTIONS_URL}/openai`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-    },
-    body: JSON.stringify({ messages })
-  });
+  try {
+    console.log('Calling OpenAI Function with URL:', FUNCTIONS_URL);
+    console.log('Messages:', messages);
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    console.error('API Error:', errorData);
-    throw new Error(errorData.error || 'APIリクエストが失敗しました');
+    const response = await fetch(`${FUNCTIONS_URL}/openai`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ messages })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('API Error Response:', errorData);
+      throw new Error(errorData.error || 'APIリクエストが失敗しました');
+    }
+
+    const data = await response.json();
+    console.log('API Response:', data);
+    return data.content;
+  } catch (error) {
+    console.error('API Call Error:', error);
+    throw error;
   }
-
-  const data = await response.json();
-  return data.content;
 }
 
 /**
