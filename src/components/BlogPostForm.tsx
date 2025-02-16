@@ -7,6 +7,7 @@ import { Toast } from './Toast';
 import { BlogPostPreview } from './BlogPostPreview';
 import debounce from 'lodash/debounce';
 import { downloadPost } from '../lib/exportUtils';
+import { generateBlogOutline } from '../lib/openai';
 
 type BlogPostFormProps = {
   post?: BlogPost;
@@ -349,7 +350,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setToast({ type: 'success', message: 'タイトルを設定しました' });
   };
 
-  // 記事構成生成関数を追加
+  // 記事構成生成関数を修正
   const generateOutline = async () => {
     if (!theme) {
       setToast({ type: 'error', message: 'テーマを入力してください' });
@@ -359,37 +360,18 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setIsGeneratingOutline(true);
     try {
       console.log('記事構成生成開始:', { theme, tone });
-      const response = await fetch(`${API_BASE_URL}/api/generate-outline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          theme,
-          tone
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('記事構成の生成に失敗しました');
-      }
-
-      const data = await response.json();
-      console.log('生成された記事構成:', data);
-      setGeneratedOutline(data);
+      
+      const outlineContent = await generateBlogOutline(theme, tone);
+      console.log('生成された記事構成:', outlineContent);
+      
+      const parsedOutline = JSON.parse(outlineContent);
+      setGeneratedOutline(parsedOutline);
       setToast({ type: 'success', message: '記事構成を生成しました' });
     } catch (error) {
       console.error('記事構成生成エラー:', error);
       setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
     } finally {
       setIsGeneratingOutline(false);
-      // デバッグ用：状態を確認
-      console.log('現在の状態:', {
-        title,
-        theme,
-        generatedOutline,
-        isGeneratingContent
-      });
     }
   };
 
