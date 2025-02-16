@@ -90,7 +90,8 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
       }
     ];
 
-    return await callOpenAIFunction(messages);
+    const response = await callOpenAIFunction(messages);
+    return validateOutlineResponse(response);
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('アウトライン生成に失敗しました');

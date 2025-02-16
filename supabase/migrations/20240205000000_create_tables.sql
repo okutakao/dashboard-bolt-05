@@ -16,7 +16,7 @@ CREATE TABLE blog_sections (
     post_id UUID REFERENCES blog_posts(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
-    order INTEGER NOT NULL,
+    column_order INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );

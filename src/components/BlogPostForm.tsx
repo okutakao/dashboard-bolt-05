@@ -31,6 +31,13 @@ type FormData = {
   }>;
 };
 
+type GeneratedOutlineType = {
+  sections: Array<{
+    title: string;
+    content: string;
+  }>;
+};
+
 const defaultSection: FormSection = {
   title: '',
   content: '',
@@ -63,16 +70,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
-  const [generatedOutline, setGeneratedOutline] = useState<{
-    sections: Array<{
-      title: string;
-      description: string;
-      recommendedLength: string;
-    }>;
-    estimatedReadingTime: string;
-    targetAudience: string;
-    keywords: string[];
-  } | null>(null);
+  const [generatedOutline, setGeneratedOutline] = useState<GeneratedOutlineType | null>(null);
   const [draftId, setDraftId] = useState<string | undefined>(post?.id);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
@@ -364,7 +362,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     const newSections = generatedOutline.sections.map((section, index) => ({
       title: section.title,
-      content: section.description,
+      content: section.content,
       order: index,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -373,7 +371,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     console.log('新しいセクション:', newSections);
     setSections(newSections);
     setGeneratedOutline(null);
-    setIsGeneratingContent(false); // 常にfalseに設定
+    setIsGeneratingContent(false);
 
     setToast({ type: 'success', message: '記事構成を適用しました' });
   };
@@ -722,31 +720,6 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               </div>
               
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium">推定読了時間:</span>
-                    <p className="text-sm">{generatedOutline.estimatedReadingTime}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">想定読者:</span>
-                    <p className="text-sm">{generatedOutline.targetAudience}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <span className="text-sm font-medium">キーワード:</span>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {generatedOutline.keywords.map((keyword, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="space-y-4">
                   <span className="text-sm font-medium">セクション:</span>
                   {generatedOutline.sections.map((section, index) => (
@@ -756,10 +729,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
                     >
                       <h4 className="font-medium">{section.title}</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                        {section.description}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        推奨文字数: {section.recommendedLength}
+                        {section.content}
                       </p>
                     </div>
                   ))}
