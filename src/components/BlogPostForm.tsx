@@ -364,9 +364,12 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       const outlineContent = await generateBlogOutline(theme, tone);
       console.log('生成された記事構成:', outlineContent);
       
-      const parsedOutline = JSON.parse(outlineContent);
-      setGeneratedOutline(parsedOutline);
-      setToast({ type: 'success', message: '記事構成を生成しました' });
+      if (outlineContent) {
+        setGeneratedOutline(outlineContent);
+        setToast({ type: 'success', message: '記事構成を生成しました' });
+      } else {
+        throw new Error('記事構成の生成に失敗しました');
+      }
     } catch (error) {
       console.error('記事構成生成エラー:', error);
       setToast({ type: 'error', message: '記事構成の生成に失敗しました' });

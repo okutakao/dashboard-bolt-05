@@ -42,51 +42,22 @@ async function callOpenAIFunction(messages: any[]) {
 
 /**
  * ChatGPTにメッセージを送信し、応答を取得する
- * @param message ユーザーからのメッセージ
- * @returns ChatGPTからの応答
  */
 export async function sendChatMessage(message: string): Promise<string> {
-  try {
-    const { data, error } = await supabase.functions.invoke('openai', {
-      body: {
-        messages: [{ role: "user", content: message }]
-      }
-    });
-
-    if (error) throw error;
-    return data.content;
-  } catch (error) {
-    console.error('OpenAI API Error:', error);
-    throw new Error('ChatGPTとの通信中にエラーが発生しました: ' + (error as Error).message);
-  }
+  return callOpenAIFunction([{ role: "user", content: message }]);
 }
 
 /**
  * システムプロンプトを含むチャット会話を送信する
- * @param systemPrompt システムプロンプト
- * @param userMessage ユーザーメッセージ
- * @returns ChatGPTからの応答
  */
 export async function sendChatMessageWithSystem(
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
-  try {
-    const { data, error } = await supabase.functions.invoke('openai', {
-      body: {
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage }
-        ]
-      }
-    });
-
-    if (error) throw error;
-    return data.content;
-  } catch (error) {
-    console.error('OpenAI API Error:', error);
-    throw new Error('ChatGPTとの通信中にエラーが発生しました');
-  }
+  return callOpenAIFunction([
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userMessage }
+  ]);
 }
 
 /**
@@ -202,18 +173,11 @@ export async function generateArticleContent(
         }
       ];
 
-      const { data, error } = await supabase.functions.invoke('openai', {
-        body: { messages }
-      });
-
-      if (error) {
-        console.error('Supabase Functions Error:', error);
-        throw error;
-      }
+      const content = await callOpenAIFunction(messages);
       
       generatedSections.push({
         title: section.title,
-        content: data.content
+        content
       });
 
       console.log(`セクション ${currentSection}/${totalSections} の生成が完了しました`);
