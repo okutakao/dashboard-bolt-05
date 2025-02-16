@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // Edge Functions URLの設定
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openai`;
 
 /**
  * OpenAI APIを呼び出す共通関数
