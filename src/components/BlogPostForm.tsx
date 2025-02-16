@@ -7,7 +7,7 @@ import { Toast } from './Toast';
 import { BlogPostPreview } from './BlogPostPreview';
 import debounce from 'lodash/debounce';
 import { downloadPost } from '../lib/exportUtils';
-import { generateBlogOutline } from '../lib/openai';
+import { generateBlogOutline, generateArticleContent, generateTitle as generateTitleAPI } from '../lib/openai';
 
 type BlogPostFormProps = {
   post?: BlogPost;
@@ -38,8 +38,6 @@ const defaultSection: FormSection = {
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const { user } = useAuth();
@@ -304,7 +302,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     };
   }, [title, theme, tone, sections, debouncedSave]);
 
-  // タイトル生成関数を追加
+  // タイトル生成関数を修正
   const generateTitle = async () => {
     if (!theme && sections.length === 0) {
       setToast({ type: 'error', message: 'テーマまたは内容を入力してください' });
@@ -313,27 +311,8 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     setIsGeneratingTitle(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/generate-title`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          theme,
-          content: sections.map(s => `${s.title}\n${s.content}`).join('\n\n')
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('タイトル生成に失敗しました');
-      }
-
-      const data = await response.json();
-      const titles = data.choices[0].message.content
-        .split('\n')
-        .filter((line: string) => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
-        .map((line: string) => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
-
+      const content = sections.map(s => `${s.title}\n${s.content}`).join('\n\n');
+      const titles = await generateTitleAPI(theme, content);
       setSuggestedTitles(titles);
     } catch (error) {
       console.error('タイトル生成エラー:', error);
@@ -408,50 +387,12 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     setIsGeneratingContent(true);
     try {
-      const currentSections = sections.map(section => ({
-        title: section.title,
-        description: section.content,
-        recommendedLength: '500文字程度'
-      }));
-
-      console.log('本文生成リクエスト:', {
-        title,
-        theme,
-        tone,
-        sections: currentSections
-      });
-
-      const response = await fetch(`${API_BASE_URL}/api/generate-content`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          theme,
-          tone,
-          outline: {
-            sections: currentSections,
-            estimatedReadingTime: '10分程度',
-            targetAudience: 'プログラミング初心者',
-            keywords: [theme]
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('記事本文の生成に失敗しました');
-      }
-
-      const data = await response.json();
-      console.log('生成された本文:', data);
-      
-      setSections(data.sections.map((section: any, index: number) => ({
-        title: section.title,
-        content: section.content,
+      const result = await generateArticleContent(title, theme, sections, tone);
+      setSections(result.sections.map((section, index) => ({
+        ...section,
         order: index,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })));
       
       setToast({ type: 'success', message: '記事本文を生成しました' });

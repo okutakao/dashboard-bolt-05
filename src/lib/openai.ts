@@ -238,3 +238,48 @@ export function validateOutlineResponse(response: string): GeneratedOutline {
     throw new Error('生成されたアウトラインの形式が不正です');
   }
 }
+
+/**
+ * タイトルを生成する
+ */
+export async function generateTitle(theme: string, content?: string): Promise<string[]> {
+  try {
+    const messages = [
+      {
+        role: "system",
+        content: "あなたはブログ記事のタイトルを生成する専門家です。SEOを意識した魅力的なタイトルを3つ提案してください。"
+      },
+      {
+        role: "user",
+        content: `以下の条件でブログ記事のタイトルを3つ提案してください：
+        
+テーマ: ${theme}
+${content ? `内容の一部: ${content}\n` : ''}
+条件：
+- 読者の興味を引く魅力的なタイトル
+- SEOを意識した検索されやすいタイトル
+- 30文字以内
+- 記事の価値が伝わるタイトル
+- 日本語で提案
+
+形式：
+1. [タイトル1]
+2. [タイトル2]
+3. [タイトル3]`
+      }
+    ];
+
+    const response = await callOpenAIFunction(messages);
+    
+    // レスポンスからタイトルを抽出
+    const titles = response
+      .split('\n')
+      .filter(line => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
+      .map(line => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
+
+    return titles;
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    throw new Error('タイトル生成に失敗しました');
+  }
+}
