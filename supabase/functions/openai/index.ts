@@ -1,12 +1,13 @@
 // Follow Supabase Edge Function best practices
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
-}
+  'Access-Control-Allow-Credentials': 'true'
+};
 
 console.log('Hello from OpenAI Function!')
 
@@ -19,12 +20,14 @@ serve(async (req) => {
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
     if (!OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not set');
       throw new Error('OPENAI_API_KEY is not set')
     }
 
     // リクエストボディの取得
     const { messages } = await req.json()
     if (!messages || !Array.isArray(messages)) {
+      console.error('Invalid request format: messages array is required');
       throw new Error('Invalid request format: messages array is required')
     }
 

@@ -13,32 +13,25 @@ const supabase = createClient(
 );
 
 // Edge Functions URLの設定
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openai`;
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/openai`;
 
 /**
  * OpenAI APIを呼び出す共通関数
  */
 async function callOpenAIFunction(messages: any[]) {
   try {
-    console.log('Calling OpenAI Function with URL:', FUNCTIONS_URL);
+    console.log('Calling OpenAI Function...');
     console.log('Messages:', messages);
 
-    const response = await fetch(`${FUNCTIONS_URL}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ messages })
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: { messages }
     });
 
-    if (!response.ok) {
-      const error = await response.json();
+    if (error) {
       console.error('Supabase Functions Error:', error);
-      throw new Error(error.message || 'APIリクエストが失敗しました');
+      throw error;
     }
 
-    const data = await response.json();
     console.log('API Response:', data);
     return data.content;
   } catch (error) {
@@ -54,23 +47,13 @@ async function callOpenAIFunction(messages: any[]) {
  */
 export async function sendChatMessage(message: string): Promise<string> {
   try {
-    const response = await fetch(`${FUNCTIONS_URL}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: {
         messages: [{ role: "user", content: message }]
-      })
+      }
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'APIリクエストが失敗しました');
-    }
-
-    const data = await response.json();
+    if (error) throw error;
     return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
@@ -89,26 +72,16 @@ export async function sendChatMessageWithSystem(
   userMessage: string
 ): Promise<string> {
   try {
-    const response = await fetch(`${FUNCTIONS_URL}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage }
         ]
-      })
+      }
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'APIリクエストが失敗しました');
-    }
-
-    const data = await response.json();
+    if (error) throw error;
     return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
@@ -229,21 +202,14 @@ export async function generateArticleContent(
         }
       ];
 
-      const response = await fetch(`${FUNCTIONS_URL}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ messages })
+      const { data, error } = await supabase.functions.invoke('openai', {
+        body: { messages }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'APIリクエストが失敗しました');
+      if (error) {
+        console.error('Supabase Functions Error:', error);
+        throw error;
       }
-
-      const data = await response.json();
       
       generatedSections.push({
         title: section.title,
