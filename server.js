@@ -452,17 +452,45 @@ app.post('/api/generate-content', async (req, res) => {
 
     console.log('記事本文生成リクエストを受信:', { title, theme, tone });
     
-    // セクションごとに逐次処理を行う
+    // 進捗状況を追跡するための変数
+    const totalSections = outline.sections.length;
+    let completedSections = 0;
     const generatedSections = [];
-    for (const section of outline.sections) {
-      const messages = [
-        {
-          role: "system",
-          content: "あなたは専門的な記事ライターです。与えられたテーマとセクションに基づいて、読者を惹きつける記事を生成してください。"
-        },
-        {
-          role: "user",
-          content: `以下の条件でセクションの内容を生成してください：
+    const failedSections = [];
+
+    // 進捗状況をレスポンスとして送信
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
+
+    // 進捗状況の送信関数
+    const sendProgress = (type, data) => {
+      res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+    };
+
+    // 開始を通知
+    sendProgress('start', { totalSections });
+
+    // セクションごとに逐次処理を行う
+    for (const [index, section] of outline.sections.entries()) {
+      try {
+        sendProgress('section-start', { 
+          index,
+          title: section.title,
+          current: completedSections + 1,
+          total: totalSections
+        });
+
+        const messages = [
+          {
+            role: "system",
+            content: "あなたは専門的な記事ライターです。与えられたテーマとセクションに基づいて、読者を惹きつける記事を生成してください。"
+          },
+          {
+            role: "user",
+            content: `以下の条件でセクションの内容を生成してください：
 
 タイトル: ${title}
 テーマ: ${theme}
@@ -474,50 +502,78 @@ app.post('/api/generate-content', async (req, res) => {
 - ${tone === 'casual' ? 'カジュアルで親しみやすい文体' : tone === 'business' ? 'ビジネス向けの簡潔で明確な文体' : '学術的で客観的な文体'}を使用
 - 読者の興味を引く具体例を含める
 - 文章は自然で読みやすくする`
-        }
-      ];
+          }
+        ];
 
-      const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 1000,
-          n: 1,
-          stream: false
-        })
-      });
+        // リトライ機能付きのAPIコール
+        const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4',
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 1000,
+            n: 1,
+            stream: false
+          })
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`セクション内容生成に失敗: ${errorData.error?.message || response.statusText}`);
+        const data = await response.json();
+        generatedSections.push({
+          title: section.title,
+          content: data.choices[0].message.content
+        });
+
+        completedSections++;
+        sendProgress('section-complete', {
+          index,
+          title: section.title,
+          current: completedSections,
+          total: totalSections
+        });
+
+        // APIレート制限を考慮した待機時間
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+      } catch (error) {
+        console.error(`セクション "${section.title}" の生成中にエラー:`, error);
+        failedSections.push({
+          index,
+          title: section.title,
+          error: error.message
+        });
+        sendProgress('section-error', {
+          index,
+          title: section.title,
+          error: error.message
+        });
       }
-
-      const data = await response.json();
-      generatedSections.push({
-        title: section.title,
-        content: data.choices[0].message.content
-      });
-
-      // セクション間に少し待機時間を入れる
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    console.log('全セクションの生成が完了');
-    res.json({ sections: generatedSections });
-    
+    // 最終結果の送信
+    if (failedSections.length > 0) {
+      sendProgress('complete-with-errors', {
+        sections: generatedSections,
+        failed: failedSections
+      });
+    } else {
+      sendProgress('complete', { sections: generatedSections });
+    }
+
+    // ストリームを終了
+    res.end();
+
   } catch (error) {
     console.error('Error in /api/generate-content:', error);
-    res.status(500).json({ 
-      error: '記事本文生成エラー',
-      details: error.message,
-      stack: error.stack
+    sendProgress('error', {
+      message: '記事本文生成エラー',
+      details: error.message
     });
+    res.end();
   }
 });
 

@@ -4,8 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 // Supabaseクライアントの初期化
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false
+    }
+  }
 );
+
+// Edge Functions URLの設定
+const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL;
 
 /**
  * ChatGPTにメッセージを送信し、応答を取得する
@@ -14,13 +22,23 @@ const supabase = createClient(
  */
 export async function sendChatMessage(message: string): Promise<string> {
   try {
-    const { data, error } = await supabase.functions.invoke('openai', {
-      body: {
+    const response = await fetch(`${FUNCTIONS_URL}/openai`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({
         messages: [{ role: "user", content: message }]
-      }
+      })
     });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'APIリクエストが失敗しました');
+    }
+
+    const data = await response.json();
     return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
