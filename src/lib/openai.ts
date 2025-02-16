@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // Edge Functions URLの設定
-const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc`;
+const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 /**
  * OpenAI APIを呼び出す共通関数
@@ -22,30 +22,21 @@ async function callOpenAIFunction(messages: any[]) {
   try {
     console.log('Calling OpenAI Function with URL:', FUNCTIONS_URL);
     console.log('Messages:', messages);
-    console.log('Using Anon Key:', import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-    const response = await fetch(`${FUNCTIONS_URL}/openai`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-      },
-      body: JSON.stringify({ messages })
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: { messages }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('API Error Response:', errorData);
-      throw new Error(errorData.error || 'APIリクエストが失敗しました');
+    if (error) {
+      console.error('Supabase Functions Error:', error);
+      throw error;
     }
 
-    const data = await response.json();
     console.log('API Response:', data);
     return data.content;
   } catch (error) {
     console.error('API Call Error:', error);
-    throw error;
+    throw new Error('APIリクエストが失敗しました: ' + (error as Error).message);
   }
 }
 
@@ -56,27 +47,17 @@ async function callOpenAIFunction(messages: any[]) {
  */
 export async function sendChatMessage(message: string): Promise<string> {
   try {
-    const response = await fetch(`${FUNCTIONS_URL}/openai`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('openai', {
+      body: {
         messages: [{ role: "user", content: message }]
-      })
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'APIリクエストが失敗しました');
-    }
-
-    const data = await response.json();
+    if (error) throw error;
     return data.content;
   } catch (error) {
     console.error('OpenAI API Error:', error);
-    throw new Error('ChatGPTとの通信中にエラーが発生しました');
+    throw new Error('ChatGPTとの通信中にエラーが発生しました: ' + (error as Error).message);
   }
 }
 
