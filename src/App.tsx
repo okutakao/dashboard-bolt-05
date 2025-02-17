@@ -14,15 +14,20 @@ import { supabase } from './supabase';
 type AppView = 'list' | 'detail' | 'create' | 'edit';
 
 function App() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const { posts, loading: postsLoading, error: postsError, refreshPosts } = useBlogPosts();
   const [view, setView] = useState<AppView>('list');
   const [selectedPost, setSelectedPost] = useState<BlogPost | undefined>();
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
 
+  // 認証状態が変更されたときにトーストをクリア
+  useEffect(() => {
+    setToast(null);
+  }, [user]);
+
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await supabase.auth.signOut();
       setToast({ type: 'success', message: 'ログアウトしました' });
     } catch (error) {
       setToast({ type: 'error', message: 'ログアウトに失敗しました' });
@@ -126,9 +131,17 @@ function App() {
           )}
         </main>
       </div>
-      {toast && <Toast type={toast.type} message={toast.message} />}
+      {toast && (
+        <Toast 
+          type={toast.type} 
+          message={toast.message} 
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
 
+// デフォルトエクスポートを修正
 export default App;

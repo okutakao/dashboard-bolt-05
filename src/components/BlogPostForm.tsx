@@ -1,16 +1,41 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText } from 'lucide-react';
+import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText, Download } from 'lucide-react';
 import { BlogPost, BlogSection, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
 import { BlogPostPreview } from './BlogPostPreview';
 import debounce from 'lodash/debounce';
+import { downloadPost } from '../lib/exportUtils';
+import { generateBlogOutline, generateArticleContent, generateTitle as generateTitleAPI } from '../lib/openai';
 
 type BlogPostFormProps = {
   post?: BlogPost;
   onSave: (post: BlogPost) => void;
   onCancel: () => void;
+};
+
+type FormData = {
+  title: string;
+  theme: string;
+  tone: BlogPost['tone'];
+  status: BlogPost['status'];
+  createdAt: string;
+  updatedAt: string;
+  sections: Array<{
+    title: string;
+    content: string;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+type GeneratedOutlineType = {
+  sections: Array<{
+    title: string;
+    content: string;
+  }>;
 };
 
 const defaultSection: FormSection = {
@@ -45,16 +70,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
-  const [generatedOutline, setGeneratedOutline] = useState<{
-    sections: Array<{
-      title: string;
-      description: string;
-      recommendedLength: string;
-    }>;
-    estimatedReadingTime: string;
-    targetAudience: string;
-    keywords: string[];
-  } | null>(null);
+  const [generatedOutline, setGeneratedOutline] = useState<GeneratedOutlineType | null>(null);
   const [draftId, setDraftId] = useState<string | undefined>(post?.id);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
@@ -89,18 +105,29 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!user) {
       setToast({ type: 'error', message: 'ログインが必要です' });
       return;
     }
 
-    if (!validateForm()) {
-      setToast({ type: 'error', message: '入力内容を確認してください' });
+    if (!title.trim()) {
+      setErrors(prev => ({ ...prev, title: 'タイトルは必須です' }));
+      return;
+    }
+
+    if (!theme.trim()) {
+      setErrors(prev => ({ ...prev, theme: 'テーマは必須です' }));
+      return;
+    }
+
+    if (sections.length === 0) {
+      setErrors(prev => ({ ...prev, sections: '少なくとも1つのセクションが必要です' }));
       return;
     }
 
     setIsSubmitting(true);
+    setErrors({});
 
     try {
       const now = new Date().toISOString();
@@ -109,43 +136,28 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         // 更新の場合
         const updatedPost = await updateBlogPost({
           id: post.id,
-          userId: post.userId,
+          userId: user.id,
           title,
           theme,
           tone,
           status: post.status,
           createdAt: post.createdAt,
           updatedAt: now,
-          sections: sections.map((section, index) => {
-            if (section.id) {
-              // 既存のセクション
-              return {
-                id: section.id,
-                postId: post.id,
-                title: section.title,
-                content: section.content,
-                order: index,
-                createdAt: section.createdAt,
-                updatedAt: now
-              } as BlogSection;
-            } else {
-              // 新規セクション
-              return {
-                postId: post.id,
-                title: section.title,
-                content: section.content,
-                order: index,
-                createdAt: now,
-                updatedAt: now
-              } as FormSection;
-            }
-          })
+          sections: sections.map((section, index) => ({
+            id: section.id,
+            postId: section.postId,
+            title: section.title,
+            content: section.content,
+            order: index,
+            createdAt: section.createdAt,
+            updatedAt: now
+          }))
         });
         setToast({ type: 'success', message: '記事を更新しました' });
         onSave(updatedPost);
       } else {
         // 新規作成の場合
-        const newPost = await createBlogPost({
+        const formData: FormData = {
           title,
           theme,
           tone,
@@ -158,8 +170,9 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             order: index,
             createdAt: now,
             updatedAt: now
-          } as FormSection))
-        }, user.id);
+          }))
+        };
+        const newPost = await createBlogPost(formData, user.id);
         setToast({ type: 'success', message: '記事を作成しました' });
         onSave(newPost);
       }
@@ -207,6 +220,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         // 既存の下書きを更新
         const updatedPost = await updateBlogPost({
           id: draftId,
+          userId: user.id,
           title,
           theme,
           tone,
@@ -254,7 +268,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             updatedAt: now
           }))
         }, user.id);
-        setDraftId(newPost.id); // 新規作成後にIDを保存
+        setDraftId(newPost.id);
         setLastSaved(new Date());
       }
     } catch (error) {
@@ -286,7 +300,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     };
   }, [title, theme, tone, sections, debouncedSave]);
 
-  // タイトル生成関数を追加
+  // タイトル生成関数を修正
   const generateTitle = async () => {
     if (!theme && sections.length === 0) {
       setToast({ type: 'error', message: 'テーマまたは内容を入力してください' });
@@ -295,27 +309,8 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     setIsGeneratingTitle(true);
     try {
-      const response = await fetch('http://localhost:3000/api/generate-title', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          theme,
-          content: sections.map(s => `${s.title}\n${s.content}`).join('\n\n')
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('タイトル生成に失敗しました');
-      }
-
-      const data = await response.json();
-      const titles = data.choices[0].message.content
-        .split('\n')
-        .filter((line: string) => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
-        .map((line: string) => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
-
+      const content = sections.map(s => `${s.title}\n${s.content}`).join('\n\n');
+      const titles = await generateTitleAPI(theme, content);
       setSuggestedTitles(titles);
     } catch (error) {
       console.error('タイトル生成エラー:', error);
@@ -332,7 +327,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setToast({ type: 'success', message: 'タイトルを設定しました' });
   };
 
-  // 記事構成生成関数を追加
+  // 記事構成生成関数を修正
   const generateOutline = async () => {
     if (!theme) {
       setToast({ type: 'error', message: 'テーマを入力してください' });
@@ -342,37 +337,21 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setIsGeneratingOutline(true);
     try {
       console.log('記事構成生成開始:', { theme, tone });
-      const response = await fetch('http://localhost:3000/api/generate-outline', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          theme,
-          tone
-        })
-      });
-
-      if (!response.ok) {
+      
+      const outlineContent = await generateBlogOutline(theme, tone);
+      console.log('生成された記事構成:', outlineContent);
+      
+      if (outlineContent) {
+        setGeneratedOutline(outlineContent);
+        setToast({ type: 'success', message: '記事構成を生成しました' });
+      } else {
         throw new Error('記事構成の生成に失敗しました');
       }
-
-      const data = await response.json();
-      console.log('生成された記事構成:', data);
-      setGeneratedOutline(data);
-      setToast({ type: 'success', message: '記事構成を生成しました' });
     } catch (error) {
       console.error('記事構成生成エラー:', error);
       setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
     } finally {
       setIsGeneratingOutline(false);
-      // デバッグ用：状態を確認
-      console.log('現在の状態:', {
-        title,
-        theme,
-        generatedOutline,
-        isGeneratingContent
-      });
     }
   };
 
@@ -383,7 +362,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
 
     const newSections = generatedOutline.sections.map((section, index) => ({
       title: section.title,
-      content: section.description,
+      content: section.content,
       order: index,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -392,62 +371,28 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     console.log('新しいセクション:', newSections);
     setSections(newSections);
     setGeneratedOutline(null);
+    setIsGeneratingContent(false);
+
     setToast({ type: 'success', message: '記事構成を適用しました' });
-    
-    // デバッグ用：状態を確認
-    console.log('構成適用後の状態:', {
-      title,
-      theme,
-      sections: newSections,
-      generatedOutline: null
-    });
   };
 
-  // 記事本文生成関数を追加
+  // 記事本文生成関数を修正
   const generateContent = async () => {
-    if (!title || !theme || (!generatedOutline && sections.length === 0)) {
-      setToast({ type: 'error', message: 'タイトル、テーマ、記事構成が必要です' });
+    if (!theme || sections.length === 0) {
+      setToast({ type: 'error', message: 'テーマと記事構成が必要です' });
       return;
     }
 
     setIsGeneratingContent(true);
     try {
-      const currentSections = sections.map(section => ({
-        title: section.title,
-        description: section.content,
-        recommendedLength: '500文字程度'
-      }));
-
-      const response = await fetch('http://localhost:3000/api/generate-content', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          theme,
-          tone,
-          outline: {
-            sections: currentSections,
-            estimatedReadingTime: '10分程度',
-            targetAudience: 'プログラミング初心者',
-            keywords: [theme]
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('記事本文の生成に失敗しました');
-      }
-
-      const data = await response.json();
-      setSections(data.sections.map((section: any, index: number) => ({
-        title: section.title,
-        content: section.content,
+      const result = await generateArticleContent(title, theme, sections, tone);
+      setSections(result.sections.map((section, index) => ({
+        ...section,
         order: index,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       })));
+      
       setToast({ type: 'success', message: '記事本文を生成しました' });
     } catch (error) {
       console.error('記事本文生成エラー:', error);
@@ -457,29 +402,69 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     }
   };
 
+  const handleExport = () => {
+    try {
+      const postData = {
+        id: post?.id || 'draft',
+        userId: user?.id || 'draft',
+        title,
+        theme,
+        tone,
+        status: 'draft' as const,
+        createdAt: post?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sections: sections.map((section, index) => ({
+          id: section.id || `temp-${index}`,
+          postId: post?.id || 'draft',
+          title: section.title,
+          content: section.content,
+          order: index,
+          createdAt: section.createdAt || new Date().toISOString(),
+          updatedAt: section.updatedAt || new Date().toISOString()
+        }))
+      } satisfies BlogPost;
+      
+      downloadPost(postData);
+    } catch (error) {
+      console.error('記事のエクスポート中にエラー:', error);
+      setToast({ type: 'error', message: 'エクスポートに失敗しました' });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between mb-4 space-y-4 sm:space-y-0">
         <div className="text-sm text-gray-500">
           {lastSaved && `最終保存: ${lastSaved.toLocaleString()}`}
         </div>
-        <button
-          type="button"
-          onClick={() => setIsPreviewMode(!isPreviewMode)}
-          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-        >
-          {isPreviewMode ? (
-            <>
-              <Edit className="h-5 w-5" />
-              <span>編集モード</span>
-            </>
-          ) : (
-            <>
-              <Eye className="h-5 w-5" />
-              <span>プレビュー</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 transition-colors"
+            title="マークダウンでエクスポート"
+          >
+            <Download className="h-5 w-5" />
+            <span>エクスポート</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPreviewMode(!isPreviewMode)}
+            className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+          >
+            {isPreviewMode ? (
+              <>
+                <Edit className="h-5 w-5" />
+                <span>編集モード</span>
+              </>
+            ) : (
+              <>
+                <Eye className="h-5 w-5" />
+                <span>プレビュー</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {isPreviewMode ? (
@@ -599,7 +584,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             <button
               type="button"
               onClick={generateContent}
-              disabled={isGeneratingContent || !title || !theme || (!generatedOutline && sections.length === 0)}
+              disabled={isGeneratingContent || !theme || sections.length === 0}
               className="px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isGeneratingContent ? (
@@ -735,31 +720,6 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               </div>
               
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium">推定読了時間:</span>
-                    <p className="text-sm">{generatedOutline.estimatedReadingTime}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium">想定読者:</span>
-                    <p className="text-sm">{generatedOutline.targetAudience}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <span className="text-sm font-medium">キーワード:</span>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {generatedOutline.keywords.map((keyword, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
-                      >
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="space-y-4">
                   <span className="text-sm font-medium">セクション:</span>
                   {generatedOutline.sections.map((section, index) => (
@@ -769,10 +729,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
                     >
                       <h4 className="font-medium">{section.title}</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                        {section.description}
-                      </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                        推奨文字数: {section.recommendedLength}
+                        {section.content}
                       </p>
                     </div>
                   ))}

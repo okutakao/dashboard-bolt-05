@@ -23,13 +23,13 @@ export interface BlogSection {
 }
 
 export type FormSection = {
+  id?: string;
+  postId?: string;
   title: string;
   content: string;
   order: number;
   createdAt: string;
   updatedAt: string;
-  id?: string;
-  postId?: string;
 };
 
 export type NewBlogSection = Omit<BlogSection, 'id'>;
@@ -55,16 +55,31 @@ export type NewBlogPost = {
   status: BlogPost['status'];
   createdAt: string;
   updatedAt: string;
-  sections: Omit<BlogSection, 'id' | 'postId'>[];
+  sections: Array<{
+    title: string;
+    content: string;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type UpdateBlogPost = {
   id: string;
+  userId: string;
   title: string;
   theme: string;
   tone: BlogPost['tone'];
   status: BlogPost['status'];
   createdAt: string;
   updatedAt: string;
-  sections: (BlogSection | Omit<BlogSection, 'id'>)[];
+  sections: Array<{
+    id?: string;
+    postId?: string;
+    title: string;
+    content: string;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };

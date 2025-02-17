@@ -1,11 +1,12 @@
 import React from 'react';
-import { FileText, Edit2, Trash2, Clock, Tag, Save } from 'lucide-react';
+import { FileText, Edit2, Trash2, Clock, Tag, Save, Download } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { useBlogPosts } from '../hooks/useBlogPosts';
 import { deleteBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
 import { BlogPostStatusToggle } from './BlogPostStatusToggle';
+import { downloadPost } from '../lib/exportUtils';
 
 type BlogPostListProps = {
   onSelectPost: (post: BlogPost) => void;
@@ -18,23 +19,38 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
   const [toast, setToast] = React.useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   const formatDate = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return date.toLocaleTimeString('ja-JP', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } else if (diffDays < 7) {
-      return `${diffDays}日前`;
-    } else {
-      return date.toLocaleDateString('ja-JP', {
-        month: 'short',
-        day: 'numeric'
-      });
+    try {
+      const now = new Date();
+      const date = new Date(dateString);
+      
+      // 日付が不正な場合は早期リターン
+      if (isNaN(date.getTime())) {
+        return '日付なし';
+      }
+
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        // 今日の場合は時刻を表示
+        return date.toLocaleTimeString('ja-JP', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } else if (diffDays < 7) {
+        // 1週間以内の場合は「〇日前」
+        return `${diffDays}日前`;
+      } else {
+        // それ以外は日付を表示
+        return date.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+    } catch (error) {
+      console.error('日付のフォーマットエラー:', error);
+      return '日付なし';
     }
   };
 
@@ -182,6 +198,24 @@ type PostCardProps = {
 };
 
 function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: PostCardProps) {
+  const handleExport = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      downloadPost(post);
+    } catch (error) {
+      console.error('記事のエクスポート中にエラーが発生:', error);
+    }
+  };
+
+  const formatTone = (tone: BlogPost['tone']) => {
+    const toneMap: Record<BlogPost['tone'], string> = {
+      casual: 'カジュアル',
+      business: 'ビジネス',
+      academic: 'アカデミック'
+    };
+    return toneMap[tone] || tone;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
       <div className="p-6">
@@ -189,7 +223,7 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
           <Clock className="h-4 w-4" />
           <span>{formatDate(post.updatedAt)}</span>
           <Tag className="h-4 w-4 ml-2" />
-          <span className="capitalize">{post.tone}</span>
+          <span>{formatTone(post.tone)}</span>
         </div>
         <h2 className="text-xl font-semibold mb-2 line-clamp-2">
           {post.title}
@@ -203,6 +237,13 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
             onStatusChange={onStatusChange}
           />
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="p-2 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 transition-colors"
+              title="マークダウンでエクスポート"
+            >
+              <Download className="h-5 w-5" />
+            </button>
             <button
               onClick={() => onSelect(post)}
               className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"

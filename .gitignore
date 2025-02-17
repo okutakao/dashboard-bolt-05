@@ -28,3 +28,10 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Environment backup
+env_backup/
+
+# Process ID files
+.*.pid
+.vercel
