@@ -13,8 +13,7 @@ export function AuthForm() {
 
   const handleSignUp = async () => {
     try {
-      // 現在のセッションを確実にクリア
-      await supabase.auth.signOut();
+      setLoading(true);
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -25,11 +24,16 @@ export function AuthForm() {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        if (error.message === 'User already registered') {
+          throw new Error('このメールアドレスは既に登録されています。確認メールをご確認いただくか、ログインをお試しください。');
+        }
+        throw error;
+      }
 
       console.log('サインアップ成功:', data);
       
-      // 再度セッションをクリア
+      // 自動ログインを防ぐためにセッションをクリア
       await supabase.auth.signOut();
       
       // 状態をリセット
@@ -37,6 +41,7 @@ export function AuthForm() {
       setEmail('');
       setPassword('');
       setShowSuccessMessage(true);
+      setIsSignUp(true);  // サインアップモードを維持
       
     } catch (error) {
       console.error('サインアップエラー:', error);
@@ -44,6 +49,8 @@ export function AuthForm() {
         type: 'error',
         message: error instanceof Error ? error.message : '認証に失敗しました'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -86,7 +93,7 @@ export function AuthForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-xl w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
             {isSignUp ? 'アカウント作成' : 'ログイン'}
@@ -101,10 +108,13 @@ export function AuthForm() {
                 </svg>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                アカウントを作成しました
+                アカウント作成リクエストを受け付けました
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
+              <p className="text-gray-600 dark:text-gray-300 mb-4">
                 {registeredEmail}
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                確認メールをお送りしました。メール内のリンクをクリックして、アカウントを有効化してください。
               </p>
               <button
                 onClick={handleProceedToLogin}
@@ -113,7 +123,7 @@ export function AuthForm() {
                 ログイン画面へ進む
               </button>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-                作成したアカウントでログインしてください
+                メールを確認後、ログインしてください
               </p>
             </div>
           </div>

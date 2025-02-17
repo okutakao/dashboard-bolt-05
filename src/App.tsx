@@ -25,8 +25,21 @@ function App() {
     setToast(null);
   }, [user]);
 
+  // ユーザーが変更されたときに状態をリセット
+  useEffect(() => {
+    if (user) {
+      setView('list');
+      setSelectedPost(undefined);
+      refreshPosts();
+    }
+  }, [user]);
+
   const handleSignOut = async () => {
     try {
+      // アプリケーションの状態をリセット
+      setView('list');
+      setSelectedPost(undefined);
+      // ログアウトを実行
       await supabase.auth.signOut();
       setToast({ type: 'success', message: 'ログアウトしました' });
     } catch (error) {
@@ -82,7 +95,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-screen-xl">
         <div className="flex flex-col sm:flex-row items-center justify-between mb-4 space-y-4 sm:space-y-0">
           <div className="flex items-center gap-4">
             {view !== 'list' && (
