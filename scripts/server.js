@@ -12,8 +12,9 @@ const __dirname = dirname(__filename);
 // グローバルなエラーハンドリングの設定
 process.on('uncaughtException', (error) => {
   console.error('予期せぬエラーが発生しました:', error);
-  // エラーログを記録
-  fs.appendFileSync('error.log', `${new Date().toISOString()} - Uncaught Exception:\n${error.stack}\n\n`);
+  // エラーログを記録（絶対パスを使用）
+  const errorLogPath = new URL('error.log', import.meta.url).pathname;
+  fs.appendFileSync(errorLogPath, `${new Date().toISOString()} - Uncaught Exception:\n${error.stack}\n\n`);
   // 3秒後に安全に終了
   setTimeout(() => {
     process.exit(1);
@@ -22,8 +23,9 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未処理のPromise拒否:', reason);
-  // エラーログを記録
-  fs.appendFileSync('error.log', `${new Date().toISOString()} - Unhandled Rejection:\n${reason}\n\n`);
+  // エラーログを記録（絶対パスを使用）
+  const errorLogPath = new URL('error.log', import.meta.url).pathname;
+  fs.appendFileSync(errorLogPath, `${new Date().toISOString()} - Unhandled Rejection:\n${reason}\n\n`);
 });
 
 // プロセスシグナルのハンドリング
@@ -96,6 +98,9 @@ if (!apiKey.startsWith('sk-') && !apiKey.startsWith('sk-proj-')) {
   process.exit(1);
 }
 
+// OpenAI APIのベースURL
+const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
+
 // サーバーの状態監視
 let isServerHealthy = true;
 let lastError = null;
@@ -119,7 +124,7 @@ setInterval(() => {
   
   // メモリ使用量が高い場合は警告
   const memoryUsagePercent = (status.memory.heapUsed / status.memory.heapTotal) * 100;
-  if (memoryUsagePercent > 80) {
+  if (memoryUsagePercent > 90) {
     console.warn(`High memory usage: ${memoryUsagePercent.toFixed(2)}%`);
   }
 }, 60000); // 1分ごとにチェック
@@ -226,7 +231,7 @@ app.post('/api/chat/completions', async (req, res) => {
     
     console.log('使用するAPIキー:', cleanApiKey.substring(0, 10) + '...');
     
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(`${OPENAI_API_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -299,7 +304,7 @@ app.post('/api/generate-title', async (req, res) => {
       }
     ];
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(`${OPENAI_API_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -378,11 +383,11 @@ app.post('/api/generate-outline', async (req, res) => {
       }
     ];
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(`${OPENAI_API_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey.trim()}`
       },
       body: JSON.stringify({
         model: 'gpt-4',
@@ -396,20 +401,29 @@ app.post('/api/generate-outline', async (req, res) => {
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('OpenAI APIエラーレスポンス:', errorData);
       throw new Error(`記事構成生成に失敗: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('記事構成生成成功');
-    
-    // レスポンスの内容をJSONとしてパース
-    const outlineContent = JSON.parse(data.choices[0].message.content);
-    res.json(outlineContent);
+    console.log('OpenAI API リクエスト成功:', data);
+
+    try {
+      const content = data.choices[0].message.content;
+      const parsedContent = JSON.parse(content);
+      res.json(parsedContent);
+    } catch (parseError) {
+      console.error('JSONパースエラー:', parseError);
+      throw new Error('APIレスポンスの形式が不正です');
+    }
   } catch (error) {
     console.error('Error in /api/generate-outline:', error);
+    lastError = error;
+    isServerHealthy = false;
     res.status(500).json({ 
       error: '記事構成生成エラー',
-      details: error.message
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -459,7 +473,7 @@ ${JSON.stringify(outline, null, 2)}
       }
     ];
 
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(`${OPENAI_API_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -513,27 +527,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-
-// サーバーの起動処理の改善
-const startServer = () => {
-  try {
-    server = app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-      console.log('Environment variables:');
-      console.log('- OPENAI_API_KEY:', apiKey ? `設定されています (${apiKey.substring(0, 10)}...)` : '設定されていません');
-    });
-
-    // Keep-Alive接続のタイムアウト設定
-    server.keepAliveTimeout = 65000;
-    server.headersTimeout = 66000;
-
-    return server;
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
 // サーバーの起動
-startServer(); 
+const PORT = process.env.PORT || 3000;
+server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log('Environment variables:');
+  console.log(`- OPENAI_API_KEY: ${apiKey ? '設定されています (' + apiKey.substring(0, 10) + '...)' : '設定されていません'}`);
+});
+
+// Keep-Alive接続のタイムアウト設定
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000; 

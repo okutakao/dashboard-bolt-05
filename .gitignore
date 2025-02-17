@@ -35,3 +35,38 @@ env_backup/
 # Process ID files
 .*.pid
 .vercel
+
+# 依存関係
+node_modules/
+.pnp
+.pnp.js
+
+# ビルド出力
+dist/
+build/
+
+# 環境変数
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ログファイル
+*.log
+logs/
+server.log
+
+# エディタ設定
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS生成ファイル
+.DS_Store
+Thumbs.db
+
+# Supabase
+**/supabase/.branches
+**/supabase/.temp

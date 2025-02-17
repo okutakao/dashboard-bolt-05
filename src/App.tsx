@@ -3,7 +3,7 @@ import { BlogPostForm } from './components/BlogPostForm';
 import { BlogPostList } from './components/BlogPostList';
 import { BlogPostDetail } from './components/BlogPostDetail';
 import { ThemeToggle } from './components/ThemeToggle';
-import { AuthForm } from './components/AuthForm';
+import { AuthFormV2 } from './components/AuthFormV2';
 import { useAuth } from './contexts/AuthContext';
 import { BlogPost } from './lib/models';
 import { useBlogPosts } from './hooks/useBlogPosts';
@@ -86,7 +86,7 @@ function App() {
   // 未認証の場合はログインフォームを表示
   if (!user) {
     console.log('未認証状態です。ログインフォームを表示します。');
-    return <AuthForm />;
+    return <AuthFormV2 />;
   }
 
   if (postsError) {
