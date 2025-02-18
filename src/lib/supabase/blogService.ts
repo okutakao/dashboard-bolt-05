@@ -99,6 +99,22 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
   };
 }
 
+interface BackupData {
+  title: string;
+  theme: string;
+  tone: BlogPost['tone'];
+  status: BlogPost['status'];
+  updated_at: string;
+  sections?: Array<{
+    post_id: string;
+    title: string;
+    content: string;
+    order: number;
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
 export async function createBlogPost(
   post: {
     title: string;
@@ -117,83 +133,169 @@ export async function createBlogPost(
   },
   userId: string
 ): Promise<BlogPost> {
-  // トランザクションを使用して一貫性を保証
-  const { data: existingDraft, error: searchError } = await supabase
-    .from('blog_posts')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('status', 'draft')
-    .eq('title', post.title)
-    .single();
+  const maxRetries = 3;
+  let retryCount = 0;
 
-  if (searchError && searchError.code !== 'PGRST116') {
-    throw searchError;
-  }
-
-  if (existingDraft) {
-    // 既存の下書きが見つかった場合は更新
-    return updateBlogPost({
-      ...post,
-      id: existingDraft.id,
-      userId
-    });
-  }
-
-  // 新規作成
-  const { data: newPost, error: insertError } = await supabase
-    .from('blog_posts')
-    .insert([
-      {
-        title: post.title,
-        theme: post.theme,
-        tone: post.tone,
-        status: post.status,
-        user_id: userId,
-        created_at: post.createdAt,
-        updated_at: post.updatedAt
+  while (retryCount < maxRetries) {
+    try {
+      // セッションの確認と再取得
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.warn('セッションの再取得を試みます...');
+        const { data: refreshResult, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshResult.session) {
+          if (retryCount === maxRetries - 1) {
+            throw new Error('セッションの更新に失敗しました。再度ログインしてください。');
+          }
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
       }
-    ])
-    .select()
-    .single();
 
-  if (insertError) throw insertError;
-  if (!newPost) throw new Error('Failed to create blog post');
+      // 既存の下書きを検索
+      const { data: existingDraft, error: searchError } = await supabase
+        .from('blog_posts')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'draft')
+        .eq('title', post.title)
+        .single();
 
-  // セクションの作成
-  const { error: sectionsError } = await supabase
-    .from('blog_sections')
-    .insert(
-      post.sections.map((section, index) => ({
-        post_id: newPost.id,
-        title: section.title,
-        content: section.content,
-        order: section.order || index,
-        created_at: section.createdAt,
-        updated_at: section.updatedAt
-      }))
-    );
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('下書き検索エラー:', searchError);
+        if (retryCount === maxRetries - 1) {
+          throw new Error('記事の保存中にエラーが発生しました');
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        continue;
+      }
 
-  if (sectionsError) throw sectionsError;
+      if (existingDraft) {
+        return updateBlogPost({
+          ...post,
+          id: existingDraft.id,
+          userId
+        });
+      }
 
-  return {
-    id: newPost.id,
-    userId: newPost.user_id,
-    title: newPost.title,
-    theme: newPost.theme,
-    tone: newPost.tone,
-    status: newPost.status,
-    createdAt: newPost.created_at,
-    updatedAt: newPost.updated_at,
-    sections: post.sections.map((section, index) => ({
-      id: '', // 一時的なIDを設定
-      postId: newPost.id,
-      title: section.title,
-      content: section.content,
-      order: section.order || index,
-      createdAt: section.createdAt,
-      updatedAt: section.updatedAt
-    }))
-  };
+      // 現在時刻を一度だけ取得して再利用
+      const currentTime = new Date().toISOString();
+
+      // トランザクション的な処理のために一時データを保持
+      let tempPostId: string | null = null;
+      let tempSections: Array<{
+        id: string;
+        post_id: string;
+        title: string;
+        content: string;
+        order: number;
+        created_at: string;
+        updated_at: string;
+      }> | null = null;
+
+      // 新規記事の作成
+      const { data: newPost, error: insertError } = await supabase
+        .from('blog_posts')
+        .insert([
+          {
+            title: post.title,
+            theme: post.theme,
+            tone: post.tone,
+            status: post.status,
+            user_id: userId,
+            created_at: currentTime,
+            updated_at: currentTime
+          }
+        ])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('記事作成エラー:', insertError);
+        if (retryCount === maxRetries - 1) {
+          throw new Error('記事の作成に失敗しました');
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        continue;
+      }
+
+      if (!newPost) {
+        throw new Error('記事の作成に失敗しました');
+      }
+
+      tempPostId = newPost.id;
+
+      // セクションの作成
+      const { data: sections, error: sectionsError } = await supabase
+        .from('blog_sections')
+        .insert(
+          post.sections.map((section, index) => ({
+            post_id: newPost.id,
+            title: section.title,
+            content: section.content,
+            order: section.order || index,
+            created_at: currentTime,
+            updated_at: currentTime
+          }))
+        )
+        .select();
+
+      if (sectionsError || !sections) {
+        console.error('セクション作成エラー:', sectionsError);
+        // 記事の削除（ロールバック）
+        if (tempPostId) {
+          await supabase
+            .from('blog_posts')
+            .delete()
+            .eq('id', tempPostId);
+        }
+        if (retryCount === maxRetries - 1) {
+          throw new Error('セクションの作成に失敗しました');
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        continue;
+      }
+
+      tempSections = sections;
+
+      // 最終的な記事データを返す
+      return {
+        id: newPost.id,
+        userId: newPost.user_id,
+        title: newPost.title,
+        theme: newPost.theme,
+        tone: newPost.tone,
+        status: newPost.status,
+        createdAt: newPost.created_at,
+        updatedAt: newPost.updated_at,
+        sections: tempSections.map(section => ({
+          id: section.id,
+          postId: section.post_id,
+          title: section.title,
+          content: section.content,
+          order: section.order,
+          createdAt: section.created_at,
+          updatedAt: section.updated_at
+        }))
+      };
+
+    } catch (error) {
+      console.error('記事作成中にエラーが発生:', error);
+      if (retryCount === maxRetries - 1) {
+        throw new Error(error instanceof Error ? error.message : '記事の作成に失敗しました');
+      }
+      retryCount++;
+      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+    }
+  }
+
+  throw new Error('記事の作成に失敗しました。再度お試しください。');
 }
 
 export async function updateBlogPost(
@@ -217,66 +319,172 @@ export async function updateBlogPost(
     }>;
   }
 ): Promise<BlogPost> {
-  const { data: updatedPost, error: updateError } = await supabase
-    .from('blog_posts')
-    .update({
-      title: post.title,
-      theme: post.theme,
-      tone: post.tone,
-      status: post.status,
-      updated_at: post.updatedAt
-    })
-    .eq('id', post.id)
-    .eq('user_id', post.userId)
-    .select()
-    .single();
+  const maxRetries = 3;
+  let retryCount = 0;
+  let backupData: BackupData | null = null;
 
-  if (updateError) throw updateError;
-  if (!updatedPost) throw new Error('Failed to update blog post');
+  while (retryCount < maxRetries) {
+    try {
+      // セッションの確認と再取得
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.warn('セッションの再取得を試みます...');
+        const { data: refreshResult, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshResult.session) {
+          if (retryCount === maxRetries - 1) {
+            throw new Error('セッションの更新に失敗しました。再度ログインしてください。');
+          }
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+      }
 
-  // 既存のセクションを削除
-  const { error: deleteError } = await supabase
-    .from('blog_sections')
-    .delete()
-    .eq('post_id', post.id);
+      // バックアップの取得
+      if (!backupData) {
+        const { data: originalPost, error: backupError } = await supabase
+          .from('blog_posts')
+          .select(`
+            *,
+            sections:blog_sections(*)
+          `)
+          .eq('id', post.id)
+          .single();
 
-  if (deleteError) throw deleteError;
+        if (backupError || !originalPost) {
+          console.error('バックアップの取得に失敗:', backupError);
+          if (retryCount === maxRetries - 1) {
+            throw new Error('記事の取得に失敗しました');
+          }
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
 
-  // 新しいセクションを作成
-  const { error: sectionsError } = await supabase
-    .from('blog_sections')
-    .insert(
-      post.sections.map((section, index) => ({
-        post_id: post.id,
-        title: section.title,
-        content: section.content,
-        order: section.order || index,
-        created_at: section.createdAt,
-        updated_at: section.updatedAt
-      }))
-    );
+        backupData = {
+          title: originalPost.title,
+          theme: originalPost.theme,
+          tone: originalPost.tone,
+          status: originalPost.status,
+          updated_at: originalPost.updated_at,
+          sections: originalPost.sections
+        };
+      }
 
-  if (sectionsError) throw sectionsError;
+      // 現在時刻を一度だけ取得して再利用
+      const currentTime = new Date().toISOString();
 
-  return {
-    id: updatedPost.id,
-    userId: updatedPost.user_id,
-    title: updatedPost.title,
-    theme: updatedPost.theme,
-    tone: updatedPost.tone,
-    status: updatedPost.status,
-    createdAt: updatedPost.created_at,
-    updatedAt: updatedPost.updated_at,
-    sections: post.sections.map((section, index) => ({
-      id: '', // 一時的なIDを設定
-      postId: updatedPost.id,
-      title: section.title,
-      content: section.content,
-      order: section.order || index,
-      createdAt: section.createdAt,
-      updatedAt: section.updatedAt
-    }))
-  };
+      // 記事の更新
+      const { data: updatedPost, error: updateError } = await supabase
+        .from('blog_posts')
+        .update({
+          title: post.title,
+          theme: post.theme,
+          tone: post.tone,
+          status: post.status,
+          updated_at: currentTime
+        })
+        .eq('id', post.id)
+        .eq('user_id', post.userId)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('記事の更新に失敗:', updateError);
+        if (retryCount === maxRetries - 1) {
+          throw new Error('記事の更新に失敗しました');
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        continue;
+      }
+
+      // セクションの更新
+      try {
+        // 既存のセクションを削除
+        const { error: deleteError } = await supabase
+          .from('blog_sections')
+          .delete()
+          .eq('post_id', post.id);
+
+        if (deleteError) {
+          throw new Error('セクションの削除に失敗しました');
+        }
+
+        // 新しいセクションを作成
+        const { data: newSections, error: insertError } = await supabase
+          .from('blog_sections')
+          .insert(
+            post.sections.map((section, index) => ({
+              post_id: post.id,
+              title: section.title,
+              content: section.content,
+              order: section.order || index,
+              created_at: currentTime,
+              updated_at: currentTime
+            }))
+          )
+          .select();
+
+        if (insertError) {
+          // エラーが発生した場合、バックアップから復元
+          if (backupData) {
+            await supabase
+              .from('blog_posts')
+              .update({
+                title: backupData.title,
+                theme: backupData.theme,
+                tone: backupData.tone,
+                status: backupData.status,
+                updated_at: backupData.updated_at
+              })
+              .eq('id', post.id);
+
+            if (backupData.sections) {
+              await supabase
+                .from('blog_sections')
+                .insert(backupData.sections);
+            }
+          }
+          throw new Error('セクションの保存に失敗しました。変更を元に戻します。');
+        }
+
+        // 成功した場合、更新された記事を返す
+        return {
+          ...updatedPost,
+          sections: newSections.map(section => ({
+            id: section.id,
+            postId: section.post_id,
+            title: section.title,
+            content: section.content,
+            order: section.order,
+            createdAt: section.created_at,
+            updatedAt: section.updated_at
+          }))
+        };
+
+      } catch (sectionError) {
+        console.error('セクション更新中にエラーが発生:', sectionError);
+        if (retryCount === maxRetries - 1) {
+          throw new Error(sectionError instanceof Error ? sectionError.message : 'セクションの更新に失敗しました');
+        }
+        retryCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
+
+    } catch (error) {
+      console.error('記事の更新中にエラーが発生:', error);
+      if (retryCount === maxRetries - 1) {
+        throw new Error(error instanceof Error ? error.message : '記事の更新に失敗しました');
+      }
+      retryCount++;
+      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+    }
+  }
+
+  throw new Error('記事の更新に失敗しました。再度お試しください。');
 }
 
 export async function deleteBlogPost(id: string, userId: string): Promise<void> {
