@@ -58,8 +58,8 @@ cleanup() {
     echo "クリーンアップ完了"
 }
 
-# エラーハンドリング
-trap cleanup ERR EXIT
+# エラーハンドリング（エラー時のみクリーンアップを実行）
+trap cleanup ERR
 
 # 既存のプロセスを停止
 echo "既存のプロセスを停止中..."
@@ -69,8 +69,18 @@ kill_process 5173
 # 少し待機
 sleep 2
 
+# 環境変数の読み込みを確認
+if [ ! -f .env ]; then
+    echo "エラー: .envファイルが見つかりません"
+    exit 1
+fi
+
 # バックエンドサーバーを起動
 echo "バックエンドサーバーを起動中..."
+# 環境変数を明示的に設定してからサーバーを起動
+set -a
+source .env
+set +a
 NODE_ENV=development node scripts/server.js > logs/server.log 2>&1 &
 backend_pid=$!
 
@@ -86,6 +96,7 @@ else
     echo "バックエンドサーバーの起動に失敗しました"
     tail -n 50 logs/server.log
     cleanup
+    exit 1
 fi
 
 # フロントエンドサーバーを起動
