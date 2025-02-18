@@ -4,7 +4,6 @@
 set -e
 
 # メモリ設定
-export DOCKER_MEMORY=2g
 export NODE_OPTIONS="--max-old-space-size=512 --expose-gc"
 
 # ログディレクトリの作成と権限設定
@@ -56,7 +55,6 @@ cleanup() {
         rm -f .backend.pid
     fi
     kill_process 5173 || true
-    npm run supabase:stop || true
     echo "クリーンアップ完了"
 }
 
@@ -65,23 +63,15 @@ trap cleanup ERR EXIT
 
 # 既存のプロセスを停止
 echo "既存のプロセスを停止中..."
-npm run supabase:stop || true
 kill_process 3000
 kill_process 5173
 
 # 少し待機
 sleep 2
 
-# Supabaseを起動
-echo "Supabaseを起動中..."
-npm run supabase:start
-
-# 少し待機
-sleep 5
-
 # バックエンドサーバーを起動
 echo "バックエンドサーバーを起動中..."
-NODE_ENV=development NODE_OPTIONS="--max-old-space-size=512 --expose-gc" node scripts/server.js > logs/server.log 2>&1 &
+NODE_ENV=development node scripts/server.js > logs/server.log 2>&1 &
 backend_pid=$!
 
 # プロセスIDを保存

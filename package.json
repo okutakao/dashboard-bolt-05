@@ -15,9 +15,6 @@
     "start-all": "./scripts/start-servers.sh",
     "start-all:local": "NODE_ENV=development ./scripts/start-servers.sh",
     "start-all:staging": "NODE_ENV=staging ./scripts/start-servers.sh",
-    "supabase:start": "supabase start",
-    "supabase:stop": "supabase stop",
-    "supabase:status": "supabase status",
     "functions:serve": "supabase functions serve",
     "functions:deploy": "supabase functions deploy openai --project-ref hjddfnmenqeutfbnpklh"
   },
