@@ -5,81 +5,179 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fetch from 'node-fetch';
 import fs from 'fs';
+import path from 'path';
+import { logError, logMemory, logProcess } from '../scripts/utils/logging.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// グローバルなエラーハンドリングの設定
-process.on('uncaughtException', (error) => {
-  console.error('予期せぬエラーが発生しました:', error);
-  // エラーログを記録（絶対パスを使用）
-  const errorLogPath = new URL('error.log', import.meta.url).pathname;
-  fs.appendFileSync(errorLogPath, `${new Date().toISOString()} - Uncaught Exception:\n${error.stack}\n\n`);
-  // 3秒後に安全に終了
-  setTimeout(() => {
-    process.exit(1);
-  }, 3000);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('未処理のPromise拒否:', reason);
-  // エラーログを記録（絶対パスを使用）
-  const errorLogPath = new URL('error.log', import.meta.url).pathname;
-  fs.appendFileSync(errorLogPath, `${new Date().toISOString()} - Unhandled Rejection:\n${reason}\n\n`);
-});
-
-// プロセスシグナルのハンドリング
-process.on('SIGTERM', () => {
-  console.log('SIGTERMを受信しました。グレースフルシャットダウンを開始します...');
-  shutdown();
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINTを受信しました。グレースフルシャットダウンを開始します...');
-  shutdown();
-});
-
 // グローバルなサーバーインスタンス
 let server;
 
-// グレースフルシャットダウン関数
-function shutdown() {
-  // アクティブな接続を終了
-  if (server) {
-    console.log('アクティブな接続を終了中...');
-    server.close(() => {
-      console.log('サーバーをシャットダウンしました。');
-      process.exit(0);
-    });
+// シャットダウン中フラグ
+let isShuttingDown = false;
 
-    // 3秒後に強制終了（タイムアウト時間を短縮）
-    setTimeout(() => {
-      console.log('強制シャットダウンを実行します。');
-      process.exit(0);
-    }, 3000);
-  } else {
-    console.log('サーバーインスタンスが見つかりません。直ちに終了します。');
-    process.exit(0);
-  }
+// ログファイルのパスを設定
+const LOG_DIR = path.join(process.cwd(), 'logs');
+const ERROR_LOG_PATH = path.join(LOG_DIR, 'error.log');
+const MEMORY_LOG_PATH = path.join(LOG_DIR, 'memory.log');
+const PROCESS_LOG_PATH = path.join(LOG_DIR, 'process.log');
+
+// ログディレクトリの作成を確認
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-dotenv.config();
+// メモリリーク対策の強化
+const resourceManagement = {
+  activeConnections: new Set(),
+  requestCount: 0,
+  lastCleanup: Date.now(),
+  cleanupInterval: 60000, // 1分ごとにクリーンアップ
 
+  // 接続の追跡
+  trackConnection(req, res) {
+    const id = Date.now() + Math.random();
+    this.activeConnections.add(id);
+    this.requestCount++;
+
+    // リクエスト完了時のクリーンアップ
+    res.on('finish', () => {
+      this.activeConnections.delete(id);
+    });
+
+    // 定期的なクリーンアップの実行
+    if (Date.now() - this.lastCleanup > this.cleanupInterval) {
+      this.performCleanup();
+    }
+  },
+
+  // リソースクリーンアップ
+  async performCleanup() {
+    this.lastCleanup = Date.now();
+    this.activeConnections.clear();
+    this.requestCount = 0;
+    
+    // 強制的なGCの実行
+    if (global.gc) {
+      global.gc();
+    }
+  }
+};
+
+// メモリ管理の設定を調整
+const memoryManagement = {
+  lastGC: Date.now(),
+  gcInterval: 30000, // 30秒ごとにGCを検討
+  warningThreshold: 70, // 警告閾値を70%に設定
+  criticalThreshold: 80, // クリティカル閾値を80%に設定
+  consecutiveHighMemory: 0, // 連続して高メモリ使用を検出した回数
+  maxConsecutiveHighMemory: 3, // 許容する連続検出回数
+
+  getMemoryUsage() {
+    const used = process.memoryUsage();
+    return {
+      heapUsed: used.heapUsed,
+      heapTotal: used.heapTotal,
+      heapUsedPercent: (used.heapUsed / used.heapTotal) * 100, // heapTotalとの比較に修正
+      rss: used.rss
+    };
+  },
+
+  async forceGC() {
+    if (!global.gc) {
+      console.warn('ガベージコレクションが利用できません');
+      return;
+    }
+
+    try {
+      const beforeMemory = this.getMemoryUsage();
+      global.gc();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const afterMemory = this.getMemoryUsage();
+      
+      console.log('GC実行結果:', {
+        before: beforeMemory,
+        after: afterMemory,
+        freed: Math.round((beforeMemory.heapUsed - afterMemory.heapUsed) / 1024 / 1024) + 'MB'
+      });
+      
+      this.lastGC = Date.now();
+      return afterMemory.heapUsedPercent < beforeMemory.heapUsedPercent;
+    } catch (error) {
+      console.error('GC実行中にエラーが発生:', error);
+      return false;
+    }
+  },
+
+  async checkMemory() {
+    const memUsage = this.getMemoryUsage();
+    console.log('メモリ使用状況:', memUsage);
+    logMemory(memUsage);
+
+    if (memUsage.heapUsedPercent > this.criticalThreshold) {
+      this.consecutiveHighMemory++;
+      console.warn(`警告: 深刻なメモリ使用量を検出 (${memUsage.heapUsedPercent.toFixed(2)}%) - 連続検出: ${this.consecutiveHighMemory}回目`);
+      
+      const gcSuccess = await this.forceGC();
+      if (!gcSuccess && this.consecutiveHighMemory >= this.maxConsecutiveHighMemory) {
+        console.error('エラー: 継続的な高メモリ使用を検出。制御された再起動を開始します。');
+        logError('Critical Memory Usage - Initiating Controlled Restart');
+        await this.performControlledRestart();
+      }
+    } else if (memUsage.heapUsedPercent > this.warningThreshold) {
+      console.warn(`警告: 高メモリ使用量を検出 (${memUsage.heapUsedPercent.toFixed(2)}%)`);
+      if (Date.now() - this.lastGC > this.gcInterval) {
+        await this.forceGC();
+      }
+    } else {
+      this.consecutiveHighMemory = 0;
+    }
+  },
+
+  async performControlledRestart() {
+    try {
+      console.log('制御された再起動を開始します...');
+      
+      // アクティブなリクエストの完了を待機
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // クリーンアップの実行
+      await cleanup();
+      
+      // 新しいプロセスを起動
+      const { spawn } = await import('child_process');
+      const args = process.argv.slice(1);
+      
+      const newProcess = spawn(process.argv[0], args, {
+        detached: true,
+        stdio: 'inherit',
+        env: { ...process.env, RESTARTED: '1' }
+      });
+      
+      newProcess.unref();
+      
+      // 現在のプロセスを終了
+      setTimeout(() => process.exit(0), 1000);
+    } catch (error) {
+      console.error('制御された再起動に失敗:', error);
+      process.exit(1);
+    }
+  }
+};
+
+// Express アプリケーションの設定
 const app = express();
+
+// ミドルウェアの追加
+app.use((req, res, next) => {
+  resourceManagement.trackConnection(req, res);
+  next();
+});
 
 // CORSの設定
 app.use(cors({
-  origin: function(origin, callback) {
-    // 開発環境からのリクエストをすべて許可
-    const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
 
@@ -117,17 +215,50 @@ const getHealthStatus = () => ({
   memory: process.memoryUsage()
 });
 
-// 定期的なヘルスチェック
+// メモリ使用量の監視を強化
+const monitorMemoryUsage = () => {
+  const used = process.memoryUsage();
+  const status = {
+    heapUsed: `${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`,
+    heapTotal: `${Math.round(used.heapTotal / 1024 / 1024 * 100) / 100} MB`,
+    rss: `${Math.round(used.rss / 1024 / 1024 * 100) / 100} MB`,
+    external: `${Math.round(used.external / 1024 / 1024 * 100) / 100} MB`
+  };
+  
+  console.log('Memory Usage:', status);
+  
+  // メモリ使用量が閾値を超えた場合は警告
+  const heapUsedPercent = (used.heapUsed / used.heapTotal) * 100;
+  if (heapUsedPercent > 80) {
+    console.warn(`Warning: High memory usage detected: ${heapUsedPercent.toFixed(2)}%`);
+    fs.appendFileSync('error.log', `${new Date().toISOString()} - High memory usage: ${heapUsedPercent.toFixed(2)}%\n`);
+  }
+};
+
+// プロセス情報の記録
+const logProcessInfo = () => {
+  const processInfo = {
+    pid: process.pid,
+    ppid: process.ppid,
+    platform: process.platform,
+    version: process.version,
+    uptime: process.uptime(),
+    cwd: process.cwd(),
+    execPath: process.execPath,
+    memoryUsage: process.memoryUsage()
+  };
+  
+  console.log('Process Information:', processInfo);
+  logProcess(processInfo);
+};
+
+// 定期的なヘルスチェックの間隔を短縮
 setInterval(() => {
   const status = getHealthStatus();
   console.log('Health Check:', status);
-  
-  // メモリ使用量が高い場合は警告
-  const memoryUsagePercent = (status.memory.heapUsed / status.memory.heapTotal) * 100;
-  if (memoryUsagePercent > 90) {
-    console.warn(`High memory usage: ${memoryUsagePercent.toFixed(2)}%`);
-  }
-}, 60000); // 1分ごとにチェック
+  monitorMemoryUsage();
+  logProcessInfo();
+}, 10000); // 10秒ごとにチェック
 
 // エラーハンドリングの強化
 const handleError = (error, req) => {
@@ -529,12 +660,97 @@ app.use((err, req, res, next) => {
 
 // サーバーの起動
 const PORT = process.env.PORT || 3000;
-server = app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log('Environment variables:');
-  console.log(`- OPENAI_API_KEY: ${apiKey ? '設定されています (' + apiKey.substring(0, 10) + '...)' : '設定されていません'}`);
+
+// サーバーを起動
+const startServer = async () => {
+  // Node.jsのGCを有効化
+  try {
+    const v8 = await import('v8');
+    const totalHeapSize = v8.getHeapStatistics().total_available_size;
+    console.log(`利用可能なヒープサイズ: ${Math.round(totalHeapSize / 1024 / 1024)}MB`);
+  } catch (error) {
+    console.warn('V8統計情報の取得に失敗しました:', error);
+  }
+
+  // サーバーの起動
+  server = app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log('Environment variables:');
+    console.log(`- OPENAI_API_KEY: ${apiKey ? '設定されています (' + apiKey.substring(0, 10) + '...)' : '設定されていません'}`);
+  });
+
+  // Keep-Alive接続のタイムアウト設定
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+};
+
+startServer(); 
+
+// クリーンアップ処理の統合
+const cleanup = async () => {
+  console.log('クリーンアップ処理を開始...');
+  
+  try {
+    // インターバルをクリア
+    clearInterval(memoryCheckInterval);
+    
+    // リソース管理のクリーンアップ
+    if (resourceManagement) {
+      await resourceManagement.performCleanup();
+    }
+    
+    // 最後のGC実行
+    if (memoryManagement) {
+      await memoryManagement.forceGC();
+    }
+    
+    // サーバーの終了
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            console.error('サーバー終了中にエラーが発生:', err);
+            reject(err);
+          } else {
+            console.log('サーバーを正常に終了しました');
+            resolve();
+          }
+        });
+      });
+    }
+    
+    console.log('クリーンアップ処理が完了しました');
+  } catch (error) {
+    console.error('クリーンアップ中にエラーが発生:', error);
+    throw error;
+  }
+};
+
+// シグナルハンドリングの統一
+['SIGTERM', 'SIGINT', 'SIGUSR2'].forEach((signal) => {
+  process.on(signal, async () => {
+    console.log(`${signal}を受信しました。グレースフルシャットダウンを開始します...`);
+    await cleanup();
+    process.exit(0);
+  });
 });
 
-// Keep-Alive接続のタイムアウト設定
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000; 
+// エラーハンドリングの強化
+process.on('uncaughtException', async (error) => {
+  console.error('予期せぬエラーが発生しました:', error);
+  logError(`Uncaught Exception: ${error.stack}`);
+  await cleanup();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  console.error('未処理のPromise拒否:', reason);
+  logError(`Unhandled Rejection: ${reason}`);
+  await cleanup();
+  process.exit(1);
+});
+
+// メモリ使用量の定期チェック
+const memoryCheckInterval = setInterval(async () => {
+  await memoryManagement.checkMemory();
+}, 10000); 
