@@ -36,16 +36,28 @@ serve(async (req)=>{
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4-turbo-preview',
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 1000,
+        response_format: { type: "text" },
+        top_p: 0.9,
       })
     });
     if (!response.ok) {
       const error = await response.json();
       console.error('OpenAI API error:', error);
-      throw new Error(error.error?.message || 'OpenAI API request failed');
+      
+      let errorMessage = 'OpenAI APIリクエストに失敗しました';
+      if (error.error?.code === 'rate_limit_exceeded') {
+        errorMessage = 'APIの利用制限に達しました。しばらく待ってから再試行してください。';
+      } else if (error.error?.code === 'context_length_exceeded') {
+        errorMessage = '入力テキストが長すぎます。内容を短くしてください。';
+      } else if (error.error?.code === 'invalid_api_key') {
+        errorMessage = 'API認証に失敗しました。システム管理者に連絡してください。';
+      }
+      
+      throw new Error(errorMessage);
     }
     const data = await response.json();
     console.log('OpenAI API response:', data);

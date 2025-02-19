@@ -50,13 +50,13 @@ export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
         createdAt: new Date(post.created_at).toISOString(),
         updatedAt: new Date(post.updated_at).toISOString(),
         sections: (post.sections || [])
-          .sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+          .sort((a: BlogSection, b: BlogSection) => a.sortOrder - b.sortOrder)
           .map((section: any) => ({
             id: section.id,
             postId: section.post_id,
             title: section.title,
             content: section.content,
-            order: section.order,
+            sortOrder: section.sort_order,
             createdAt: new Date(section.created_at).toISOString(),
             updatedAt: new Date(section.updated_at).toISOString(),
           }))
@@ -94,8 +94,25 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
   }
 
   return {
-    ...post,
-    sections: post.sections.sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+    id: post.id,
+    userId: post.user_id,
+    title: post.title,
+    theme: post.theme,
+    tone: post.tone,
+    status: post.status,
+    createdAt: post.created_at,
+    updatedAt: post.updated_at,
+    sections: post.sections
+      .sort((a: DatabaseBlogSection, b: DatabaseBlogSection) => a.sort_order - b.sort_order)
+      .map(section => ({
+        id: section.id,
+        postId: section.post_id,
+        title: section.title,
+        content: section.content,
+        sortOrder: section.sort_order,
+        createdAt: section.created_at,
+        updatedAt: section.updated_at
+      }))
   };
 }
 
@@ -109,7 +126,7 @@ interface BackupData {
     post_id: string;
     title: string;
     content: string;
-    order: number;
+    sort_order: number;
     created_at: string;
     updated_at: string;
   }>;
@@ -174,63 +191,44 @@ async function withRetry<T>(
 export async function createBlogPost(post: NewBlogPost, userId: string): Promise<BlogPost> {
   const isSessionValid = await ensureValidSession();
   if (!isSessionValid) {
-    throw new Error('セッションが無効です。再度ログインしてください。');
+    throw new Error('セッションが無効です');
   }
 
-  const currentTime = new Date().toISOString();
   let tempPostId: string | null = null;
 
   try {
-    const { data: existingDraft, error: searchError } = await supabase
+    const { data: newPost, error: postError } = await supabase
       .from('blog_posts')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('status', 'draft')
-      .eq('title', post.title)
-      .single();
-
-    if (existingDraft) {
-      return updateBlogPost({
-        ...post,
-        id: existingDraft.id,
-        userId
-      });
-    }
-
-    const { data: newPost, error: insertError } = await supabase
-      .from('blog_posts')
-      .insert([
-        {
-          title: post.title,
-          theme: post.theme,
-          tone: post.tone,
-          status: post.status,
-          user_id: userId,
-          created_at: currentTime,
-          updated_at: currentTime
-        }
-      ])
+      .insert({
+        user_id: userId,
+        title: post.title,
+        theme: post.theme,
+        tone: post.tone,
+        status: post.status,
+        created_at: post.createdAt,
+        updated_at: post.updatedAt
+      })
       .select()
       .single();
 
-    if (insertError || !newPost) {
-      throw new Error('記事の作成に失敗しました: ' + (insertError?.message || '不明なエラー'));
+    if (postError || !newPost) {
+      throw new Error('記事の作成に失敗しました: ' + (postError?.message || '不明なエラー'));
     }
 
     tempPostId = newPost.id;
 
+    const sectionsToCreate = post.sections.map((section, index) => ({
+      post_id: newPost.id,
+      title: section.title,
+      content: section.content,
+      sort_order: index,
+      created_at: section.createdAt,
+      updated_at: section.updatedAt
+    }));
+
     const { data: sections, error: sectionsError } = await supabase
       .from('blog_sections')
-      .insert(
-        post.sections.map((section, index) => ({
-          post_id: newPost.id,
-          title: section.title,
-          content: section.content,
-          order: section.order || index,
-          created_at: currentTime,
-          updated_at: currentTime
-        }))
-      )
+      .insert(sectionsToCreate)
       .select();
 
     if (sectionsError || !sections) {
@@ -257,7 +255,7 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
         postId: section.post_id,
         title: section.title,
         content: section.content,
-        order: section.order,
+        sortOrder: section.sort_order,
         createdAt: section.created_at,
         updatedAt: section.updated_at
       }))
@@ -281,33 +279,13 @@ interface DatabaseBlogSection {
   post_id: string;
   title: string;
   content: string;
-  order: number;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
 
-export async function updateBlogPost(
-  post: {
-    id: string;
-    userId: string;
-    title: string;
-    theme: string;
-    tone: BlogPost['tone'];
-    status: BlogPost['status'];
-    createdAt: string;
-    updatedAt: string;
-    sections: Array<{
-      title: string;
-      content: string;
-      order: number;
-      createdAt: string;
-      updatedAt: string;
-    }>;
-  }
-): Promise<BlogPost> {
+export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
   try {
-    const currentTime = new Date().toISOString();
-
     const { data: updatedPost, error: updateError } = await supabase
       .from('blog_posts')
       .update({
@@ -315,7 +293,7 @@ export async function updateBlogPost(
         theme: post.theme,
         tone: post.tone,
         status: post.status,
-        updated_at: currentTime
+        updated_at: post.updatedAt
       })
       .eq('id', post.id)
       .eq('user_id', post.userId)
@@ -323,37 +301,36 @@ export async function updateBlogPost(
       .single();
 
     if (updateError) {
-      console.error('記事の更新に失敗:', updateError);
-      throw new Error('記事の更新に失敗しました');
+      throw new Error('記事の更新に失敗しました: ' + updateError.message);
     }
 
     const sectionsToCreate = post.sections.map((section, index) => ({
       post_id: post.id,
       title: section.title,
       content: section.content,
-      order: index,
-      created_at: currentTime,
-      updated_at: currentTime
+      sort_order: index,
+      created_at: section.createdAt,
+      updated_at: section.updatedAt
     }));
 
+    // 既存のセクションを削除
     const { error: deleteError } = await supabase
       .from('blog_sections')
       .delete()
       .eq('post_id', post.id);
 
     if (deleteError) {
-      console.error('セクションの削除に失敗:', deleteError);
-      throw new Error('セクションの削除に失敗しました');
+      throw new Error('セクションの削除に失敗しました: ' + deleteError.message);
     }
 
+    // 新しいセクションを作成
     const { data: sections, error: insertError } = await supabase
       .from('blog_sections')
       .insert(sectionsToCreate)
       .select();
 
     if (insertError) {
-      console.error('セクションの作成に失敗:', insertError);
-      throw new Error('セクションの作成に失敗しました');
+      throw new Error('セクションの作成に失敗しました: ' + insertError.message);
     }
 
     return {
@@ -370,7 +347,7 @@ export async function updateBlogPost(
         postId: section.post_id,
         title: section.title,
         content: section.content,
-        order: section.order,
+        sortOrder: section.sort_order,
         createdAt: section.created_at,
         updatedAt: section.updated_at
       }))
@@ -418,8 +395,25 @@ export async function updateBlogPostStatus(id: string, status: BlogPost['status'
     if (error) throw error;
 
     return {
-      ...post,
-      sections: post.sections.sort((a: BlogSection, b: BlogSection) => a.order - b.order)
+      id: post.id,
+      userId: post.user_id,
+      title: post.title,
+      theme: post.theme,
+      tone: post.tone,
+      status: post.status,
+      createdAt: post.created_at,
+      updatedAt: post.updated_at,
+      sections: post.sections
+        .sort((a: DatabaseBlogSection, b: DatabaseBlogSection) => a.sort_order - b.sort_order)
+        .map(section => ({
+          id: section.id,
+          postId: section.post_id,
+          title: section.title,
+          content: section.content,
+          sortOrder: section.sort_order,
+          createdAt: section.created_at,
+          updatedAt: section.updated_at
+        }))
     };
   } catch (error) {
     console.error('Error updating blog post status:', error);

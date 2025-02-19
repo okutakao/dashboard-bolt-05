@@ -370,7 +370,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
         const newSections = outlineContent.sections.map((section, index) => ({
           title: section.title || '',
           content: section.content || '',
-          order: index,
+          sortOrder: index,
           createdAt: currentTime,
           updatedAt: currentTime,
         }));
@@ -382,7 +382,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
           
           if (draftId) {
             // 既存の記事を更新
-            const updatedPost = await updateBlogPost({
+            await updateBlogPost({
               id: draftId,
               userId: user.id,
               title: title || 'Untitled',
@@ -393,7 +393,6 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
               updatedAt: currentTime,
               sections: newSections,
             });
-            onSave(updatedPost);
           } else {
             // 新規記事を作成
             const newPost = await createBlogPost({
@@ -408,7 +407,6 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
             
             if (newPost?.id) {
               setDraftId(newPost.id);
-              onSave(newPost);
             } else {
               throw new Error('記事の作成に失敗しました');
             }

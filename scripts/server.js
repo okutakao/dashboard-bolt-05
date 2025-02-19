@@ -2,27 +2,91 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+
+// メモリ使用量の監視間隔（ミリ秒）
+const MEMORY_CHECK_INTERVAL = 30000; // 30秒
+
+// メモリ使用量の閾値（バイト）
+const MEMORY_THRESHOLD = 450 * 1024 * 1024; // 450MB
+
+// ログファイルの設定
+const LOG_DIR = 'logs';
+const SERVER_LOG_FILE = path.join(LOG_DIR, 'server.log');
+const ERROR_LOG_FILE = path.join(LOG_DIR, 'error.log');
+const MEMORY_LOG_FILE = path.join(LOG_DIR, 'memory.log');
+
+// ログディレクトリの作成
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR);
+}
+
+// ログ出力関数
+function log(message, type = 'info') {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] [${type}] ${message}\n`;
+  
+  // コンソールに出力
+  console.log(logMessage);
+  
+  // ファイルに出力
+  try {
+    const logFile = type === 'error' ? ERROR_LOG_FILE : SERVER_LOG_FILE;
+    fs.appendFileSync(logFile, logMessage);
+  } catch (err) {
+    console.error('ログファイルの書き込みに失敗:', err);
+  }
+}
+
+// メモリ使用量のログ出力
+function logMemoryUsage() {
+  const used = process.memoryUsage();
+  const message = `Memory Usage - RSS: ${Math.round(used.rss / 1024 / 1024)}MB, Heap: ${Math.round(used.heapUsed / 1024 / 1024)}MB/${Math.round(used.heapTotal / 1024 / 1024)}MB`;
+  
+  try {
+    fs.appendFileSync(MEMORY_LOG_FILE, `${new Date().toISOString()} - ${message}\n`);
+  } catch (err) {
+    console.error('メモリログの書き込みに失敗:', err);
+  }
+  
+  // メモリ使用量が閾値を超えた場合
+  if (used.rss > MEMORY_THRESHOLD) {
+    log('メモリ使用量が閾値を超えました。ガベージコレクションを実行します。', 'warn');
+    if (global.gc) {
+      global.gc();
+    }
+  }
+}
+
+// 定期的なメモリ監視
+setInterval(logMemoryUsage, MEMORY_CHECK_INTERVAL);
+
+// プロセスIDの保存
+const PID_FILE = '.backend.pid';
 
 // 未処理のエラーをキャッチ
 process.on('uncaughtException', (error) => {
-  console.error('未処理のエラーが発生しました:', error);
-  process.exit(1);
+  log(`未処理のエラーが発生しました: ${error.stack || error.message}`, 'error');
+  // エラーログを書き込んでから終了
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('未処理のPromise rejectionが発生しました:', reason);
-  process.exit(1);
+  log(`未処理のPromise rejectionが発生しました: ${reason}`, 'error');
 });
 
 // 終了シグナルのハンドリング
 process.on('SIGTERM', () => {
-  console.log('SIGTERMを受信しました');
-  process.exit(0);
+  log('SIGTERMを受信しました');
+  shutdown();
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINTを受信しました');
-  process.exit(0);
+  log('SIGINTを受信しました');
+  shutdown();
 });
 
 dotenv.config();
@@ -31,11 +95,24 @@ const app = express();
 
 // CORSの設定
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 600 // 10分
 }));
 
+// プリフライトリクエストの処理
+app.options('*', cors());
+
 app.use(express.json());
+
+// リクエストロギングミドルウェア
+app.use((req, res, next) => {
+  log(`${req.method} ${req.url}`, 'request');
+  next();
+});
 
 // 環境変数の検証
 if (!process.env.OPENAI_API_KEY) {
@@ -49,9 +126,16 @@ const apiKey = process.env.OPENAI_API_KEY;
 // OpenAI APIのベースURL
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 
-// ヘルスチェックエンドポイント
+// ヘルスチェックエンドポイントの強化
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  const health = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    pid: process.pid
+  };
+  res.json(health);
 });
 
 // エラーハンドリングミドルウェア
@@ -225,20 +309,46 @@ app.post('/api/chat/completions', async (req, res) => {
 // サーバーの起動
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  console.log(`サーバーが起動しました: http://localhost:${PORT}`);
+  // サーバー起動後にPIDファイルを作成
+  try {
+    fs.writeFileSync(PID_FILE, process.pid.toString());
+    log(`PIDファイルを作成しました: ${process.pid}`);
+  } catch (err) {
+    log(`PIDファイルの作成に失敗: ${err}`, 'error');
+    // PIDファイルが作成できない場合は起動を中止
+    process.exit(1);
+  }
+
+  log(`サーバーが起動しました: http://localhost:${PORT}`);
+  log(`プロセスID: ${process.pid}`);
+  logMemoryUsage();
 });
 
 // サーバーのエラーハンドリング
 server.on('error', (error) => {
-  console.error('サーバーエラーが発生しました:', error);
-  process.exit(1);
+  log(`サーバーエラーが発生しました: ${error}`, 'error');
+  shutdown();
 });
 
 // 正常なシャットダウンの処理
 const shutdown = () => {
-  console.log('サーバーをシャットダウンしています...');
+  log('サーバーをシャットダウンしています...');
+  
+  // PIDファイルの削除
+  try {
+    fs.unlinkSync(PID_FILE);
+  } catch (err) {
+    log(`PIDファイルの削除に失敗: ${err}`, 'error');
+  }
+  
   server.close(() => {
-    console.log('サーバーが正常にシャットダウンしました');
+    log('サーバーが正常にシャットダウンしました');
     process.exit(0);
   });
+  
+  // 強制シャットダウンのタイマー
+  setTimeout(() => {
+    log('強制シャットダウンを実行します', 'warn');
+    process.exit(1);
+  }, 10000); // 10秒後に強制終了
 };

@@ -17,7 +17,7 @@ export interface BlogSection {
   postId: string;
   title: string;
   content: string;
-  order: number;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,7 +27,7 @@ export type FormSection = {
   postId?: string;
   title: string;
   content: string;
-  order: number;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -58,7 +58,7 @@ export type NewBlogPost = {
   sections: Array<{
     title: string;
     content: string;
-    order: number;
+    sortOrder: number;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -78,7 +78,7 @@ export type UpdateBlogPost = {
     postId?: string;
     title: string;
     content: string;
-    order: number;
+    sortOrder: number;
     createdAt: string;
     updatedAt: string;
   }>;

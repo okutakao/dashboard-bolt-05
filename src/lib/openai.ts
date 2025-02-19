@@ -19,25 +19,58 @@ const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/openai`;
  * OpenAI APIを呼び出す共通関数
  */
 async function callOpenAIFunction(messages: any[]) {
-  try {
-    console.log('Calling OpenAI Function...');
-    console.log('Messages:', messages);
+  let retryCount = 0;
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1秒
 
-    const { data, error } = await supabase.functions.invoke('openai', {
-      body: { messages }
-    });
+  while (retryCount < maxRetries) {
+    try {
+      console.log('Calling OpenAI Function...');
+      console.log('Messages:', messages);
 
-    if (error) {
-      console.error('Supabase Functions Error:', error);
-      throw error;
+      const { data, error } = await supabase.functions.invoke('openai', {
+        body: { 
+          messages,
+          options: {
+            temperature: 0.7,
+            top_p: 0.9,
+            frequency_penalty: 0.0,
+            presence_penalty: 0.0
+          }
+        }
+      });
+
+      if (error) {
+        console.error('Supabase Functions Error:', error);
+        if (error.message?.includes('rate_limit_exceeded')) {
+          // レート制限エラーの場合は再試行
+          const delay = baseDelay * Math.pow(2, retryCount);
+          console.log(`Rate limit exceeded. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          retryCount++;
+          continue;
+        }
+        throw error;
+      }
+
+      console.log('API Response:', data);
+      return data.content;
+    } catch (error) {
+      console.error('API Call Error:', error);
+      
+      if (retryCount < maxRetries - 1) {
+        retryCount++;
+        const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(`Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      throw new Error('APIリクエストが失敗しました: ' + (error as Error).message);
     }
-
-    console.log('API Response:', data);
-    return data.content;
-  } catch (error) {
-    console.error('API Call Error:', error);
-    throw new Error('APIリクエストが失敗しました: ' + (error as Error).message);
   }
+
+  throw new Error('最大リトライ回数を超えました');
 }
 
 /**
