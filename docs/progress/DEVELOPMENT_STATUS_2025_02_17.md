@@ -428,3 +428,157 @@ feat(blog): データ永続化の信頼性向上
   - 詳細なエラーチェック
 
 Issue: #データ保存の信頼性向上 
+```
+
+## 重要：サーバー起動手順（2025-02-17 追記）
+
+### 確実に動作する起動手順
+
+1. **実行権限の付与**
+```bash
+chmod +x scripts/start-servers.sh
+```
+
+2. **サーバーの起動**
+```bash
+./scripts/start-servers.sh
+```
+
+### start-servers.shの内容
+```bash
+#!/bin/bash
+
+# 既存のプロセスを停止
+pkill -f "node scripts/server.js" || true
+
+# バックエンドサーバーの起動
+NODE_OPTIONS="--max-old-space-size=512 --expose-gc" NODE_ENV=development node scripts/server.js > logs/server.log 2>&1 &
+
+# フロントエンドの起動
+npm run dev
+```
+
+### 重要な注意点
+1. 起動スクリプトはシンプルに保つことが重要
+2. 複雑な条件分岐や環境チェックは避ける
+3. メモリ制限（512MB）とガベージコレクションの設定は必須
+4. ログは`logs/server.log`に出力される
+5. バックエンドは`&`でバックグラウンド実行する
+6. フロントエンドは最後に起動する
+
+### トラブルシューティング
+もし起動に失敗した場合：
+1. `logs`ディレクトリの存在を確認
+2. 実行権限が正しく設定されているか確認
+3. 既存のプロセスが完全に停止しているか確認
+4. ポート（3000, 5173）が利用可能か確認
+
+### 動作確認方法
+1. バックエンド: http://localhost:3000/health にアクセス
+2. フロントエンド: http://localhost:5173 にアクセス
+
+## 現在の安定設定（2025-02-17 追記）
+
+### サーバーリソース設定
+```javascript
+// メモリ管理設定
+{
+  gcInterval: 60000,           // GCの間隔: 1分
+  warningThreshold: 75,        // 警告閾値: 75%
+  criticalThreshold: 85,       // クリティカル閾値: 85%
+  maxConsecutiveHighMemory: 5, // 連続検出回数: 5回
+  streamBufferSize: 16 * 1024  // バッファサイズ: 16KB
+}
+
+// リソース管理設定
+{
+  cleanupInterval: 60000,      // クリーンアップ間隔: 1分
+  maxConcurrentRequests: 10,   // 同時リクエスト数: 10
+}
+
+// サーバー起動オプション
+NODE_OPTIONS="--max-old-space-size=512 --expose-gc"
+```
+
+これらの設定は現在安定して動作しているため、変更は避けること。
+
+## 現在の問題点（2025-02-17 20:00追記）
+
+### 1. サーバー起動の不安定性
+- メモリ使用量が不安定で、予期せぬシャットダウンが発生
+- 環境変数の設定が複雑で、起動コマンドが統一されていない
+- ログファイルの書き込み権限の問題が時々発生
+
+### 2. Supabaseとの連携問題
+- セッション管理が不安定で、`session has not expired expires_at`エラーが頻発
+- `blog_sections`テーブルのカラムが見つからないエラーが発生
+- データの永続化に関する信頼性の問題
+
+### 3. 開発環境の一貫性
+- 開発環境のセットアップが複雑
+- 環境変数の管理が煩雑
+- ローカル環境とクラウド環境の差異による問題
+
+## 確定した起動手順（2025-02-17 20:00追記）
+
+### 1. 前提条件の確認
+```bash
+# Node.jsバージョン確認（v18.0.0以上が必要）
+node -v
+
+# 必要なディレクトリの存在確認
+ls logs || mkdir -p logs
+```
+
+### 2. 環境変数の確認
+```bash
+# .envファイルが存在することを確認
+ls .env || cp .env.development .env
+```
+
+### 3. サーバーの起動（推奨方法）
+```bash
+# スクリプトを使用した起動（推奨）
+npm run start-all
+```
+
+### 4. 個別起動が必要な場合
+```bash
+# バックエンドサーバー
+NODE_ENV=development NODE_OPTIONS="--max-old-space-size=512 --expose-gc" node scripts/server.js > logs/server.log 2>&1 &
+
+# フロントエンド
+npm run dev
+```
+
+### 5. 動作確認
+1. バックエンドの確認
+   ```bash
+   curl http://localhost:3000/health
+   ```
+   期待される応答: `{"status":"ok"}`
+
+2. フロントエンドの確認
+   - ブラウザで http://localhost:5173 にアクセス
+   - ログイン画面が表示されることを確認
+
+### 6. トラブルシューティング
+```bash
+# プロセスの確認
+ps aux | grep node
+ps aux | grep vite
+
+# ログの確認
+tail -f logs/server.log
+
+# プロセスの強制終了（必要な場合）
+pkill -f "node scripts/server.js"
+pkill -f vite
+```
+
+### 7. 重要な注意点
+- メモリ制限（512MB）は必ず設定すること
+- ログディレクトリは事前に作成すること
+- 環境変数は`.env`または`.env.development`から読み込まれること
+- バックエンドは必ずバックグラウンドで実行すること
+- フロントエンドは最後に起動すること

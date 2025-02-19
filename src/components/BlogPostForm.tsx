@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, FormEvent } from 'react';
 import { PlusCircle, Save, X, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, FileText, Download } from 'lucide-react';
-import { BlogPost, BlogSection, FormSection } from '../lib/models';
+import { BlogPost, BlogSection, FormSection, NewBlogPost } from '../lib/models';
 import { createBlogPost, updateBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
@@ -8,6 +8,11 @@ import { BlogPostPreview } from './BlogPostPreview';
 import debounce from 'lodash/debounce';
 import { downloadPost } from '../lib/exportUtils';
 import { generateBlogOutline, generateArticleContent, generateTitle as generateTitleAPI } from '../lib/openai';
+import { useUser } from '@supabase/auth-helpers-react';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 type BlogPostFormProps = {
   post?: BlogPost;
@@ -74,6 +79,23 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   const [draftId, setDraftId] = useState<string | undefined>(post?.id);
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [formData, setFormData] = useState<FormData>({
+    title,
+    theme,
+    tone,
+    status: 'draft',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    sections: sections.map((section, index) => ({
+      title: section.title,
+      content: section.content,
+      order: index,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
+    })),
+  });
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -103,7 +125,7 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     return title.trim() !== '' || theme.trim() !== '' || sections.some(s => s.title.trim() !== '' || s.content.trim() !== '');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!user) {
@@ -334,22 +356,82 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
       return;
     }
 
+    if (!user) {
+      setToast({ type: 'error', message: 'ログインが必要です' });
+      return;
+    }
+
     setIsGeneratingOutline(true);
     try {
-      console.log('記事構成生成開始:', { theme, tone });
-      
       const outlineContent = await generateBlogOutline(theme, tone);
-      console.log('生成された記事構成:', outlineContent);
       
-      if (outlineContent) {
-        setGeneratedOutline(outlineContent);
-        setToast({ type: 'success', message: '記事構成を生成しました' });
+      if (outlineContent?.sections?.length > 0) {
+        const currentTime = new Date().toISOString();
+        const newSections = outlineContent.sections.map((section, index) => ({
+          title: section.title || '',
+          content: section.content || '',
+          order: index,
+          createdAt: currentTime,
+          updatedAt: currentTime,
+        }));
+
+        setSections(newSections);
+
+        try {
+          const currentTime = new Date().toISOString();
+          
+          if (draftId) {
+            // 既存の記事を更新
+            const updatedPost = await updateBlogPost({
+              id: draftId,
+              userId: user.id,
+              title: title || 'Untitled',
+              theme: theme || '',
+              tone: tone || 'casual',
+              status: 'draft',
+              createdAt: post?.createdAt || currentTime,
+              updatedAt: currentTime,
+              sections: newSections,
+            });
+            onSave(updatedPost);
+          } else {
+            // 新規記事を作成
+            const newPost = await createBlogPost({
+              title: title || 'Untitled',
+              theme: theme || '',
+              tone: tone || 'casual',
+              status: 'draft',
+              createdAt: currentTime,
+              updatedAt: currentTime,
+              sections: newSections,
+            }, user.id);
+            
+            if (newPost?.id) {
+              setDraftId(newPost.id);
+              onSave(newPost);
+            } else {
+              throw new Error('記事の作成に失敗しました');
+            }
+          }
+
+          setLastSaved(new Date());
+          setToast({ type: 'success', message: '記事構成を生成し、保存しました' });
+        } catch (error) {
+          console.error('保存エラー:', error);
+          setToast({ 
+            type: 'error', 
+            message: error instanceof Error ? error.message : '記事の保存に失敗しました'
+          });
+        }
       } else {
         throw new Error('記事構成の生成に失敗しました');
       }
     } catch (error) {
       console.error('記事構成生成エラー:', error);
-      setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
+      setToast({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : '記事構成の生成に失敗しました'
+      });
     } finally {
       setIsGeneratingOutline(false);
     }
@@ -358,11 +440,14 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
   // 生成された構成を適用する関数
   const applyOutline = () => {
     console.log('構成適用開始:', generatedOutline);
-    if (!generatedOutline) return;
+    if (!generatedOutline || !generatedOutline.sections || generatedOutline.sections.length === 0) {
+      setToast({ type: 'error', message: '適用可能な記事構成がありません' });
+      return;
+    }
 
     const newSections = generatedOutline.sections.map((section, index) => ({
       title: section.title,
-      content: section.content,
+      content: section.content || '',
       order: index,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -373,6 +458,8 @@ export function BlogPostForm({ post, onSave, onCancel }: BlogPostFormProps) {
     setGeneratedOutline(null);
     setIsGeneratingContent(false);
 
+    // 自動保存をトリガー
+    handleSubmit(new Event('submit'));
     setToast({ type: 'success', message: '記事構成を適用しました' });
   };
 
