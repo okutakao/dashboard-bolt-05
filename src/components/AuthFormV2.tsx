@@ -91,12 +91,19 @@ export function AuthFormV2() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-xl w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
+      <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md relative">
+        <div className="absolute top-4 left-4">
+          <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            blog-generator
+          </span>
+        </div>
+
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            {isSignUp ? 'アカウント作成' : 'ログイン'} v2
+            {isSignUp ? 'アカウント作成' : 'ログイン'}
           </h2>
         </div>
+
         {showSuccessMessage ? (
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
             <div className="text-center">
