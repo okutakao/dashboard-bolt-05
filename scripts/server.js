@@ -189,7 +189,7 @@ app.post('/api/generate-title', async (req, res) => {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4-mini',
         messages,
         temperature: 0.8,
         max_tokens: 500,
@@ -254,7 +254,7 @@ app.post('/api/generate-outline', async (req, res) => {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4-mini',
         messages,
         temperature: 0.7,
         max_tokens: 1000,
