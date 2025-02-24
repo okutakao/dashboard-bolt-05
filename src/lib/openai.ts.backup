@@ -129,37 +129,62 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
 
 /**
  * セクションの内容を生成する
- * @param theme 記事のテーマ
- * @param sectionTitle セクションのタイトル
- * @param previousSections これまでに生成された前のセクションの内容
- * @param isLastSection このセクションが最後（まとめ）かどうか
  */
-export async function generateBlogContent(
-  theme: string,
-  sectionTitle: string,
-  previousSections: Array<{ title: string; content: string }> = [],
-  isLastSection: boolean = false,
-  isFirstSection: boolean = previousSections.length === 0
-) {
+export async function generateBlogContent(theme: string, sectionTitle: string) {
   const maxRetries = 3;
-  const retryDelay = 1000;
+  const retryDelay = 1000; // 1秒
   const maxTokensPerRequest = 2500;
-  const minLength = 800;
-  const maxLength = 1200;
 
   const generateWithRetry = async (retryCount: number): Promise<string> => {
     try {
-      const previousContentsContext = previousSections
-        .map(section => `${section.title}:\n${section.content}\n`)
-        .join('\n');
+      const messages = [
+        {
+          role: "system",
+          content: `あなたはブログ記事のセクション内容を生成するアシスタントです。
+以下の条件に従って内容を生成してください：
+- マークダウン形式で出力
+- 800字から1200字の範囲で生成
+- 段落ごとに適切な改行を入れること
+- 箇条書きやリストを効果的に使用
+- 具体例や説明を含める
+- 読みやすく、わかりやすい文章を心がける
 
-      // 基本的な内容生成
-      const response = await generateBaseContent(theme, sectionTitle, previousContentsContext, isLastSection, isFirstSection);
-      
-      // 生成された内容の後処理
-      const processedContent = await postProcessContent(response, retryCount);
-      
-      return processedContent;
+構成：
+1. 導入（200-300字）：トピックの概要と重要性
+2. 本論（500-900字）：主要な論点と具体例の詳細な説明
+
+注意：
+- 文章は完結した形で終わること
+- 段落間の繋がりを意識すること
+- 読者にとって価値のある情報を提供すること`
+        },
+        {
+          role: "user",
+          content: `テーマ: ${theme}
+セクションタイトル: ${sectionTitle}
+上記のテーマとセクションタイトルに基づいて、セクションの内容を生成してください。`
+        }
+      ];
+
+      const response = await callOpenAIFunction(messages, {
+        max_tokens: maxTokensPerRequest,
+        temperature: 0.7,
+        presence_penalty: 0.3,
+        frequency_penalty: 0.3
+      });
+
+      // 文字数チェック
+      if (response.length < 800) {
+        console.log('生成された内容が短すぎます。再試行します。');
+        return generateWithRetry(retryCount);
+      }
+
+      if (response.length > 1200) {
+        console.log('生成された内容が長すぎます。再試行します。');
+        return generateWithRetry(retryCount);
+      }
+
+      return response;
 
     } catch (error) {
       if (error instanceof Error) {
@@ -169,117 +194,16 @@ export async function generateBlogContent(
           await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
           return generateWithRetry(retryCount + 1);
         }
-        throw error;
+        
+        // トークン制限エラーの場合
+        if (error.message.includes('token') || error.message.includes('context_length')) {
+          console.log('トークン制限により失敗。トークン数を調整して再試行します。');
+          return generateWithRetry(retryCount);
+        }
       }
+      
       throw error;
     }
-  };
-
-  // 基本的な内容を生成する関数
-  const generateBaseContent = async (
-    theme: string,
-    sectionTitle: string,
-    previousContentsContext: string,
-    isLastSection: boolean,
-    isFirstSection: boolean
-  ): Promise<string> => {
-    const systemPrompt = `あなたはブログ記事のセクションを生成するアシスタントです。
-以下の条件に従って内容を生成してください：
-- マークダウン形式で出力
-- ${minLength}字から${maxLength}字の範囲で生成
-- 段落は必ず「。」で終わるようにする
-- 箇条書きの項目は完結した文で終わるようにする
-- 文章全体が自然に完結するようにする
-- テーマに関連する具体的な事例や数値データを含める
-- 読者にとって実践的で有用な情報を提供する
-- 論理的な展開を心がける
-- 客観的な事実に基づいて説明する
-
-${isLastSection ? 'このセクションは記事全体のまとめとして、内容を総括し、読者へのアクションプランを含めてください。' : 
-  isFirstSection ? 'このセクションは記事の最初のセクションとして、テーマの背景と重要性を説明してください。' :
-  '前のセクションの内容を踏まえつつ、このセクションの内容を展開してください。'}`;
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      {
-        role: "user",
-        content: `テーマ: ${theme}
-セクションタイトル: ${sectionTitle}
-${!isFirstSection && previousContentsContext ? '\n前のセクションの内容:\n' + previousContentsContext : ''}`
-      }
-    ];
-
-    return callOpenAIFunction(messages, {
-      max_tokens: maxTokensPerRequest,
-      temperature: 0.7,
-      presence_penalty: 0.3,
-      frequency_penalty: 0.3
-    });
-  };
-
-  // 生成された内容の後処理を行う関数
-  const postProcessContent = async (content: string, retryCount: number): Promise<string> => {
-    let processedContent = content;
-    let needsAdjustment = false;
-
-    // 文字数チェックと調整
-    if (content.length < minLength || content.length > maxLength) {
-      const adjustmentPrompt = `以下の文章を${minLength}字から${maxLength}字の範囲に調整してください。
-現在の文字数: ${content.length}字
-調整の際は、文章の一貫性と完結性を保ちながら、必要に応じて詳細の追加や削減を行ってください。
-
-${content}`;
-
-      if (retryCount < maxRetries - 1) {
-        processedContent = await callOpenAIFunction([
-          { role: "system", content: "文章の長さを調整しつつ、内容の一貫性と完結性を保ってください。" },
-          { role: "user", content: adjustmentPrompt }
-        ]);
-        needsAdjustment = true;
-      }
-    }
-
-    // 段落の終わり方をチェックと修正
-    const paragraphs = processedContent.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0);
-    const hasInvalidEnding = paragraphs.some(p => {
-      // 箇条書きやコードブロック、見出しは除外
-      if (p.startsWith('- ') || p.startsWith('* ') || p.startsWith('```') || p.startsWith('#')) {
-        return false;
-      }
-      return !p.endsWith('。') && !p.endsWith('」') && !p.endsWith('）') && !p.endsWith('！') && !p.endsWith('？');
-    });
-
-    if (hasInvalidEnding && retryCount < maxRetries - 1) {
-      const adjustmentPrompt = `以下の文章の段落を適切に終わるように修正してください。
-- 各段落は「。」「！」「？」「」」「）」のいずれかで終わるようにしてください
-- 箇条書きやコードブロック、見出しは対象外です
-- 文章の自然な流れを保ちながら修正してください
-
-${processedContent}`;
-
-      processedContent = await callOpenAIFunction([
-        { role: "system", content: "文章の完結性を保ちながら、段落の終わり方を適切に修正してください。" },
-        { role: "user", content: adjustmentPrompt }
-      ]);
-      needsAdjustment = true;
-    }
-
-    // 最終チェック
-    if (needsAdjustment && retryCount < maxRetries - 1) {
-      const finalCheckPrompt = `以下の文章を最終確認し、必要に応じて微調整してください：
-- 文章の一貫性と完結性の確認
-- 段落の適切な終わり方の確認
-- 文字数が${minLength}字から${maxLength}字の範囲内であることの確認
-
-${processedContent}`;
-
-      processedContent = await callOpenAIFunction([
-        { role: "system", content: "最終確認と微調整を行います。" },
-        { role: "user", content: finalCheckPrompt }
-      ]);
-    }
-
-    return processedContent;
   };
 
   return generateWithRetry(0);

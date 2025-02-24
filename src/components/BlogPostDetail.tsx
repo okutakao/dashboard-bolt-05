@@ -1,17 +1,48 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Edit2, Download } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { Toast } from './Toast';
 import { downloadPost } from '../lib/exportUtils';
+import { getBlogPost } from '../lib/supabase/blogService';
+import { useAuth } from '../contexts/AuthContext';
 
 type BlogPostDetailProps = {
-  post: BlogPost;
+  postId: string;
   onBack: () => void;
-  onEdit: (post: BlogPost) => void;
+  onEdit: () => void;
 };
 
-export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
-  const [toast, setToast] = React.useState<{ type: 'success' | 'error', message: string } | null>(null);
+export function BlogPostDetail({ postId, onBack, onEdit }: BlogPostDetailProps) {
+  const { user } = useAuth();
+  const [post, setPost] = useState<BlogPost | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+  useEffect(() => {
+    const fetchPost = async () => {
+      if (!user) {
+        setError('認証が必要です');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const fetchedPost = await getBlogPost(postId, user.id);
+        if (fetchedPost) {
+          setPost(fetchedPost);
+        } else {
+          setError('記事が見つかりませんでした');
+        }
+      } catch (err) {
+        setError('記事の取得中にエラーが発生しました');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPost();
+  }, [postId, user]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ja-JP', {
@@ -33,6 +64,7 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
   };
 
   const handleDownload = () => {
+    if (!post) return;
     try {
       downloadPost(post);
       setToast({ type: 'success', message: '記事をダウンロードしました' });
@@ -41,6 +73,28 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
       setToast({ type: 'error', message: '記事のダウンロードに失敗しました' });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error || !post) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-500">{error || '記事が見つかりませんでした'}</p>
+        <button
+          onClick={onBack}
+          className="mt-4 text-blue-600 hover:text-blue-700 transition-colors"
+        >
+          記事一覧に戻る
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6">
@@ -55,7 +109,7 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
             <span>記事一覧に戻る</span>
           </button>
           <button
-            onClick={() => onEdit(post)}
+            onClick={onEdit}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             <Edit2 className="h-5 w-5" />
@@ -98,7 +152,7 @@ export function BlogPostDetail({ post, onBack, onEdit }: BlogPostDetailProps) {
         <div className="mb-8">
           <h2 className="text-xl sm:text-2xl font-semibold mb-4">セクション</h2>
           <div className="space-y-4">
-            {post.sections.map((section, index) => (
+            {post.sections.map((section) => (
               <div key={section.id} className="mb-8">
                 <h3 className="text-xl sm:text-2xl font-semibold mb-4">
                   {section.title}

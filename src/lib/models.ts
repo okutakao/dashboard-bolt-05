@@ -13,16 +13,6 @@ export interface BlogPost {
 }
 
 export interface BlogSection {
-  id: string;
-  postId: string;
-  title: string;
-  content: string;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type FormSection = {
   id?: string;
   postId?: string;
   title: string;
@@ -30,25 +20,29 @@ export type FormSection = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-};
+}
 
-export type NewBlogSection = Omit<BlogSection, 'id'>;
+export interface FormSection extends Omit<BlogSection, 'id' | 'postId'> {
+  id?: string;
+  postId?: string;
+}
 
 export interface AIGeneration {
   id: string;
-  postId: string;
-  sectionId?: string;
+  userId: string;
+  postId?: string;
   prompt: string;
   response: string;
-  type: 'theme' | 'outline' | 'content';
+  model: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface BlogPostWithUser extends BlogPost {
   user: User;
 }
 
-export type NewBlogPost = {
+export interface NewBlogPost {
   title: string;
   theme: string;
   tone: BlogPost['tone'];
@@ -62,9 +56,9 @@ export type NewBlogPost = {
     createdAt: string;
     updatedAt: string;
   }>;
-};
+}
 
-export type UpdateBlogPost = {
+export interface UpdateBlogPost {
   id: string;
   userId: string;
   title: string;
@@ -82,4 +76,26 @@ export type UpdateBlogPost = {
     createdAt: string;
     updatedAt: string;
   }>;
-};
+}
+
+export interface NewBlogSection extends Omit<BlogSection, 'id' | 'postId'> {}
+
+export interface ArticleStructure {
+  introduction: {
+    title: string;
+    content: string;
+    targetLength: { min: number; max: number };
+  };
+  mainSections: Array<{
+    title: string;
+    content: string;
+    targetLength: { min: number; max: number };
+    previousContext?: string;
+  }>;
+  conclusion: {
+    title: string;
+    content: string;
+    targetLength: { min: number; max: number };
+    fullContext: string;
+  };
+}

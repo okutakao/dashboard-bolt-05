@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { BlogPostForm } from './components/BlogPostForm';
 import { BlogPostList } from './components/BlogPostList';
 import { BlogPostDetail } from './components/BlogPostDetail';
@@ -8,38 +8,28 @@ import { useAuth } from './contexts/AuthContext';
 import { BlogPost } from './lib/models';
 import { useBlogPosts } from './hooks/useBlogPosts';
 import { Toast } from './components/Toast';
-import { ArrowLeft } from 'lucide-react';
+import { Breadcrumb } from './components/Breadcrumb';
+import { LogOut } from 'lucide-react';
 import { supabase } from './supabase';
 
-type AppView = 'list' | 'detail' | 'create' | 'edit';
+type View = 'list' | 'detail' | 'edit' | 'create';
 
-function App() {
-  const { user, loading } = useAuth();
-  const { posts, loading: postsLoading, error: postsError, refreshPosts } = useBlogPosts();
-  const [view, setView] = useState<AppView>('list');
-  const [selectedPost, setSelectedPost] = useState<BlogPost | undefined>();
+export function App() {
+  const { user } = useAuth();
+  const { error: postsError, refreshPosts } = useBlogPosts();
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<View>('list');
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
 
-  // 認証状態が変更されたときにトーストをクリア
   useEffect(() => {
-    setToast(null);
-  }, [user]);
-
-  // ユーザーが変更されたときに状態をリセット
-  useEffect(() => {
-    if (user) {
-      setView('list');
-      setSelectedPost(undefined);
-      refreshPosts();
+    if (!user) {
+      setCurrentView('list');
+      setSelectedPostId(null);
     }
   }, [user]);
 
   const handleSignOut = async () => {
     try {
-      // アプリケーションの状態をリセット
-      setView('list');
-      setSelectedPost(undefined);
-      // ログアウトを実行
       await supabase.auth.signOut();
       setToast({ type: 'success', message: 'ログアウトしました' });
     } catch (error) {
@@ -47,46 +37,51 @@ function App() {
     }
   };
 
-  const handleSelectPost = (post: BlogPost) => {
-    setSelectedPost(post);
-    setView('detail');
+  const handleSelectPost = (postId: string) => {
+    setSelectedPostId(postId);
+    setCurrentView('detail');
   };
 
   const handleCreatePost = () => {
-    setSelectedPost(undefined);
-    setView('create');
+    setSelectedPostId(null);
+    setCurrentView('create');
+  };
+
+  const handleEditPost = (postId: string) => {
+    setSelectedPostId(postId);
+    setCurrentView('edit');
   };
 
   const handleBack = () => {
-    setView('list');
-    setSelectedPost(undefined);
-    refreshPosts();
-  };
-
-  const handleEditPost = (post: BlogPost) => {
-    setSelectedPost(post);
-    setView('edit');
+    if (currentView === 'detail') {
+      setCurrentView('list');
+      setSelectedPostId(null);
+    } else if (currentView === 'edit' || currentView === 'create') {
+      if (selectedPostId) {
+        setCurrentView('detail');
+      } else {
+        setCurrentView('list');
+      }
+    }
   };
 
   const handleSavePost = async (post: BlogPost) => {
-    setToast({ type: 'success', message: '記事を保存しました' });
     await refreshPosts();
-    handleBack();
+    if (currentView === 'edit' && post.id) {
+      setSelectedPostId(post.id);
+      setCurrentView('detail');
+    } else {
+      setCurrentView('list');
+      setSelectedPostId(null);
+    }
   };
 
-  // ローディング中の表示
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <AuthFormV2 />
       </div>
     );
-  }
-
-  // 未認証の場合はログインフォームを表示
-  if (!user) {
-    console.log('未認証状態です。ログインフォームを表示します。');
-    return <AuthFormV2 />;
   }
 
   if (postsError) {
@@ -94,56 +89,54 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-screen-xl">
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 space-y-4 sm:space-y-0">
-          <div className="flex items-center gap-4">
-            {view !== 'list' && (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-800 shadow">
+        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center">
+            <Breadcrumb
+              view={currentView}
+              onBack={handleBack}
+              showBackButton={currentView !== 'list'}
+            />
+            <div className="flex items-center gap-4">
+              <ThemeToggle />
               <button
-                onClick={handleBack}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                onClick={handleSignOut}
+                className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+                title="サインアウト"
               >
-                <ArrowLeft className="h-5 w-5" />
-                <span>戻る</span>
+                <LogOut className="h-5 w-5" />
+                <span className="hidden sm:inline">サインアウト</span>
               </button>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <button
-              onClick={handleSignOut}
-              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-            >
-              ログアウト
-            </button>
+            </div>
           </div>
         </div>
+      </header>
 
-        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          {view === 'list' && (
-            <BlogPostList
-              onSelectPost={handleSelectPost}
-              onCreatePost={handleCreatePost}
-            />
-          )}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {currentView === 'list' && (
+          <BlogPostList
+            onSelectPost={handleSelectPost}
+            onCreatePost={handleCreatePost}
+          />
+        )}
 
-          {view === 'detail' && selectedPost && (
-            <BlogPostDetail
-              post={selectedPost}
-              onBack={handleBack}
-              onEdit={handleEditPost}
-            />
-          )}
+        {currentView === 'detail' && selectedPostId && (
+          <BlogPostDetail
+            postId={selectedPostId}
+            onEdit={() => handleEditPost(selectedPostId)}
+            onBack={handleBack}
+          />
+        )}
 
-          {(view === 'create' || view === 'edit') && (
-            <BlogPostForm
-              post={view === 'edit' ? selectedPost : undefined}
-              onSave={handleSavePost}
-              onCancel={handleBack}
-            />
-          )}
-        </main>
-      </div>
+        {(currentView === 'edit' || currentView === 'create') && (
+          <BlogPostForm
+            postId={selectedPostId || undefined}
+            onSave={handleSavePost}
+            user={user}
+          />
+        )}
+      </main>
       {toast && (
         <Toast 
           type={toast.type} 
@@ -156,5 +149,4 @@ function App() {
   );
 }
 
-// デフォルトエクスポートを修正
 export default App;

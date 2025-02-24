@@ -1,9 +1,8 @@
-import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BlogSection } from '../lib/models';
 
-type FormSection = Omit<BlogSection, 'id' | 'postId'> & {
+type PreviewSection = Omit<BlogSection, 'id' | 'postId'> & {
   id?: string;
   postId?: string;
 };
@@ -11,7 +10,7 @@ type FormSection = Omit<BlogSection, 'id' | 'postId'> & {
 type BlogPostPreviewProps = {
   title: string;
   theme: string;
-  sections: FormSection[];
+  sections: PreviewSection[];
 };
 
 export function BlogPostPreview({ title, theme, sections }: BlogPostPreviewProps) {

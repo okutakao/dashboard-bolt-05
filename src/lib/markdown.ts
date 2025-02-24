@@ -1,4 +1,5 @@
 import { MockOutline } from './mockData';
+import { BlogPost } from './models';
 
 export function convertToMarkdown(outline: MockOutline, tone: string): string {
   const sampleContent = {
@@ -21,14 +22,35 @@ export function convertToMarkdown(outline: MockOutline, tone: string): string {
   return markdown;
 }
 
-export function downloadMarkdown(content: string, filename: string) {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+export function downloadMarkdown(post: BlogPost): void {
+  const markdown = generateMarkdown(post);
+  const blob = new Blob([markdown], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${post.title}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function generateMarkdown(post: BlogPost): string {
+  const header = `---
+title: ${post.title}
+theme: ${post.theme}
+tone: ${post.tone}
+status: ${post.status}
+createdAt: ${post.createdAt}
+updatedAt: ${post.updatedAt}
+---
+
+`;
+
+  const content = post.sections
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(section => `## ${section.title}\n\n${section.content}\n`)
+    .join('\n');
+
+  return header + content;
 }

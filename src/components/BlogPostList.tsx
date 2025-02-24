@@ -9,7 +9,7 @@ import { BlogPostStatusToggle } from './BlogPostStatusToggle';
 import { downloadPost } from '../lib/exportUtils';
 
 type BlogPostListProps = {
-  onSelectPost: (post: BlogPost) => void;
+  onSelectPost: (postId: string) => void;
   onCreatePost: () => void;
 };
 
@@ -191,7 +191,7 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
 
 type PostCardProps = {
   post: BlogPost;
-  onSelect: (post: BlogPost) => void;
+  onSelect: (postId: string) => void;
   onDelete: (postId: string) => Promise<void>;
   onStatusChange: (post: BlogPost) => Promise<void>;
   formatDate: (date: string) => string;
@@ -245,7 +245,7 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
               <Download className="h-5 w-5" />
             </button>
             <button
-              onClick={() => onSelect(post)}
+              onClick={() => onSelect(post.id)}
               className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
               title="編集"
             >

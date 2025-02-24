@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Download, ChevronDown, FileText, FileCode, File as FilePdf } from 'lucide-react';
 import { ExportFormat } from '../lib/export';
 

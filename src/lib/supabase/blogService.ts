@@ -1,5 +1,15 @@
+import { BlogPost, BlogSection, NewBlogPost, UpdateBlogPost } from '../models';
 import { supabase } from '../../supabase';
-import { BlogPost, BlogSection, NewBlogPost, UpdateBlogPost, NewBlogSection } from '../models';
+
+interface DatabaseBlogSection {
+  id: string;
+  post_id: string;
+  title: string;
+  content: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
   console.log('getBlogPosts called with userId:', userId);
@@ -51,14 +61,14 @@ export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
         updatedAt: new Date(post.updated_at).toISOString(),
         sections: (post.sections || [])
           .sort((a: BlogSection, b: BlogSection) => a.sortOrder - b.sortOrder)
-          .map((section: any) => ({
+          .map((section: BlogSection) => ({
             id: section.id,
-            postId: section.post_id,
+            postId: section.postId,
             title: section.title,
             content: section.content,
-            sortOrder: section.sort_order,
-            createdAt: new Date(section.created_at).toISOString(),
-            updatedAt: new Date(section.updated_at).toISOString(),
+            sortOrder: section.sortOrder,
+            createdAt: section.createdAt,
+            updatedAt: section.updatedAt
           }))
       }));
     } catch (error) {
@@ -104,7 +114,7 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
     updatedAt: post.updated_at,
     sections: post.sections
       .sort((a: DatabaseBlogSection, b: DatabaseBlogSection) => a.sort_order - b.sort_order)
-      .map(section => ({
+      .map((section: DatabaseBlogSection) => ({
         id: section.id,
         postId: section.post_id,
         title: section.title,
@@ -116,23 +126,7 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
   };
 }
 
-interface BackupData {
-  title: string;
-  theme: string;
-  tone: BlogPost['tone'];
-  status: BlogPost['status'];
-  updated_at: string;
-  sections?: Array<{
-    post_id: string;
-    title: string;
-    content: string;
-    sort_order: number;
-    created_at: string;
-    updated_at: string;
-  }>;
-}
-
-async function ensureValidSession(): Promise<boolean> {
+export async function ensureValidSession(): Promise<boolean> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
@@ -154,38 +148,6 @@ async function ensureValidSession(): Promise<boolean> {
     console.error('セッション確認中にエラーが発生:', error);
     return false;
   }
-}
-
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  retryDelay: number = 1000
-): Promise<T> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const isSessionValid = await ensureValidSession();
-      if (!isSessionValid) {
-        throw new Error('セッションの更新に失敗しました。再度ログインしてください。');
-      }
-
-      return await operation();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error('不明なエラーが発生しました');
-      console.error(`操作に失敗 (試行 ${attempt}/${maxRetries}):`, error);
-      
-      if (attempt === maxRetries) {
-        break;
-      }
-
-      const delay = retryDelay * Math.pow(2, attempt - 1);
-      console.log(`${delay}ms後に再試行します...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError || new Error('操作に失敗しました');
 }
 
 export async function createBlogPost(post: NewBlogPost, userId: string): Promise<BlogPost> {
@@ -272,16 +234,6 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
     console.error('記事作成中にエラーが発生:', error);
     throw new Error(error instanceof Error ? error.message : '記事の作成に失敗しました');
   }
-}
-
-interface DatabaseBlogSection {
-  id: string;
-  post_id: string;
-  title: string;
-  content: string;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
@@ -405,7 +357,7 @@ export async function updateBlogPostStatus(id: string, status: BlogPost['status'
       updatedAt: post.updated_at,
       sections: post.sections
         .sort((a: DatabaseBlogSection, b: DatabaseBlogSection) => a.sort_order - b.sort_order)
-        .map(section => ({
+        .map((section: DatabaseBlogSection) => ({
           id: section.id,
           postId: section.post_id,
           title: section.title,
