@@ -1,5 +1,10 @@
 # 開発日誌
 
+使用方法：
+毎日の開発開始時に新しいファイルを作成
+
+%cp docs/templates/DEVELOPMENT_DIARY_TEMPLATE.md docs/diary/DEVELOPMENT_DIARY_YYYY_MM_DD.md
+
 ## 基本情報
 - 記入日: YYYY-MM-DD
 - 記入者: 
