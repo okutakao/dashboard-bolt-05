@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "NODE_ENV=development NODE_OPTIONS='--max-old-space-size=1024 --expose-gc' DEBUG=vite:* vite",
     "dev:local": "NODE_ENV=development vite",
     "dev:staging": "NODE_ENV=staging vite",
     "build": "tsc && vite build",
