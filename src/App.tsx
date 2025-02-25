@@ -25,6 +25,8 @@ export function App() {
     if (!user) {
       setCurrentView('list');
       setSelectedPostId(null);
+    } else {
+      setToast(null);
     }
   }, [user]);
 

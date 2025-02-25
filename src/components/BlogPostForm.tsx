@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from './ui/select';
+import { downloadPost } from '../lib/export';
 
 interface BlogPostFormProps {
   postId?: string;
@@ -429,6 +430,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     setToast({ type: 'success', message: '記事をダウンロードしました' });
   };
 
+  const handleExport = (format: 'markdown' | 'html') => {
+    if (!post) return;
+    downloadPost(post, format);
+  };
+
   const handleTitleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, title: e.target.value });
   };
@@ -743,6 +749,23 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           duration={3000}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {post && (
+        <div className="mt-8 flex gap-4">
+          <button
+            onClick={() => handleExport('markdown')}
+            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors"
+          >
+            Markdownでエクスポート
+          </button>
+          <button
+            onClick={() => handleExport('html')}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition-colors"
+          >
+            HTMLでエクスポート
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { MockOutline } from './mockData';
+import { BlogPost } from './models';
 
 // マークダウンへの変換
 export function convertToMarkdown(outline: MockOutline, tone: string): string {
@@ -78,29 +79,88 @@ export function convertToHTML(outline: MockOutline, tone: string): string {
   return html;
 }
 
-// PDFへの変換（HTML経由）
-export function convertToPDF(outline: MockOutline, tone: string): string {
-  // PDFはHTMLを経由して生成するため、同じHTMLを返す
-  return convertToHTML(outline, tone);
-}
+export type ExportFormat = 'markdown' | 'html';
 
-export type ExportFormat = 'markdown' | 'pdf' | 'html';
+export async function downloadPost(post: BlogPost, format: ExportFormat = 'markdown'): Promise<void> {
+  try {
+    // 日付文字列を生成（YYYY-MM-DD形式）
+    const dateStr = new Date().toISOString().split('T')[0];
+    // ファイル名から不正な文字を除去
+    const sanitizedTitle = post.title.replace(/[<>:"/\\|?*]/g, '_');
+    // ファイル名を生成（タイトル_YYYY-MM-DD.拡張子）
+    const fileName = `${sanitizedTitle}_${dateStr}.${format === 'markdown' ? 'md' : 'html'}`;
 
-// ファイルのダウンロード
-export function downloadFile(content: string, filename: string, format: ExportFormat) {
-  const mimeTypes = {
-    markdown: 'text/markdown;charset=utf-8',
-    html: 'text/html;charset=utf-8',
-    pdf: 'application/pdf'
-  };
+    switch (format) {
+      case 'html': {
+        const content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>${post.title}</title>
+  <style>
+    body { font-family: "Noto Sans JP", sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { color: #333; }
+    h2 { color: #666; margin-top: 30px; }
+    .meta { color: #666; margin-bottom: 30px; }
+    .section { margin-bottom: 40px; }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <h1>${post.title}</h1>
+  <div class="meta">
+    <p>テーマ: ${post.theme}</p>
+    <p>トーン: ${post.tone}</p>
+  </div>
+  ${post.sections.map(section => `
+    <div class="section">
+      <h2>${section.title}</h2>
+      <div>${section.content.replace(/\n/g, '<br>')}</div>
+    </div>
+  `).join('')}
+</body>
+</html>`;
+        const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        break;
+      }
 
-  const blob = new Blob([content], { type: mimeTypes[format] });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+      case 'markdown':
+      default: {
+        const content = `# ${post.title}
+
+## テーマ
+${post.theme}
+
+## トーン
+${post.tone}
+
+${post.sections.map(section => `
+## ${section.title}
+
+${section.content}
+`).join('\n')}`;
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('ファイルのダウンロード中にエラーが発生しました:', error);
+    throw new Error('ファイルのダウンロードに失敗しました。');
+  }
 }

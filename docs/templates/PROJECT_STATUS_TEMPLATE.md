@@ -1,15 +1,13 @@
-# プロジェクト開発状況レポートテンプレート
+# プロジェクト開発状況レポート
 
-## 記入方法
-1. このテンプレートをコピーして新しいファイルを作成
-2. ファイル名は `PROJECT_STATUS_YYYY_MM_DD.md` の形式で保存
-3. 各セクションの `[ ]` に該当する場合は `[x]` とマークを付ける
-4. 詳細情報は各セクション配下に記述
-5. 未実施または該当なしの項目は `[ ]` のままとする
-6. プロジェクトの特性に応じて、不要なセクションの削除や新規セクションの追加が可能
+## 時間管理情報
+- レポート対象期間: YYYY-MM-DD ～ YYYY-MM-DD
+- ドキュメント作成日: YYYY-MM-DD HH:MM JST
+- 最終更新日: YYYY-MM-DD HH:MM JST
+- タイムゾーン: Asia/Tokyo (JST, UTC+9)
 
 ## 基本情報
-記入日時: YYYY-MM-DD HH:MM
+記入日時: YYYY-MM-DD HH:MM JST
 
 ### プロジェクト情報
 - プロジェクト名: 
@@ -167,6 +165,13 @@
 ## 備考
 追加の注記や特記事項があれば、ここに記載してください。
 
+## 修正履歴
+- Rev1 (YYYY-MM-DD HH:MM JST): 初回作成
+- Rev2 (YYYY-MM-DD HH:MM JST): 変更内容
+
 ---
+時間管理情報:
 記入者: 
-最終更新: YYYY-MM-DD HH:MM 
+作成日: YYYY-MM-DD HH:MM JST
+最終更新: YYYY-MM-DD HH:MM JST
+タイムゾーン: Asia/Tokyo (JST, UTC+9) 
