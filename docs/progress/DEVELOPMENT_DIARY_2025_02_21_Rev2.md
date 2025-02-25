@@ -97,5 +97,20 @@
   - `src/components/AuthFormV2.tsx`
   - `docs/progress/DEVELOPMENT_DIARY_2025_02_21_Rev2.md`
 
+## 実行時の注意点
+
+### 1. 環境設定
+```bash
+# 標準的なサーバー起動方法（必ずこの方法で起動すること）
+NODE_ENV=development NODE_OPTIONS='--max-old-space-size=1024 --expose-gc' DEBUG=vite:* npm run dev
+```
+
+### 2. 重要な注意事項
+- サーバー起動時は必ず上記のコマンドを使用すること
+- メモリ制限: 1024MB
+- ガベージコレクション: 有効
+- デバッグモード: 有効（vite:*）
+- 他の起動方法は使用しないこと（安定性の観点から）
+
 ---
 最終更新: 2025-02-21 14:30 
