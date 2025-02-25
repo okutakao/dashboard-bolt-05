@@ -2,7 +2,7 @@ import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Download, Loader2, X } from 'lucide-react';
 import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
-import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
+import { generateTitle, generateBlogOutline, generateBlogContent, generateSimpleContent } from '../lib/openai';
 import { downloadMarkdown } from '../lib/markdown';
 import { BlogPostPreview } from './BlogPostPreview';
 import { Toast } from './Toast';
@@ -24,9 +24,21 @@ interface FormData {
   status: 'draft' | 'published';
 }
 
+type GenerationMode = 'simple' | 'contextual';
+
 interface Toast {
   type: 'success' | 'error' | 'info';
   message: string;
+}
+
+interface GenerationState {
+  mode: GenerationMode;
+  isGenerating: boolean;
+  abortController: AbortController | null;
+  contextState?: {
+    previousSections: Array<{ title: string; content: string }>;
+    isLastSection: boolean;
+  };
 }
 
 export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
@@ -45,6 +57,12 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     theme: '',
     tone: 'casual',
     status: 'draft'
+  });
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('simple');
+  const [generationState, setGenerationState] = useState<GenerationState>({
+    mode: 'simple',
+    isGenerating: false,
+    abortController: null
   });
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -181,10 +199,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     setGeneratingOutline(true);
 
     try {
-      const outline = await generateBlogOutline(formData.theme, formData.tone);
-      const newSections = outline.sections.map((section, index) => ({
+      const outline = await generateBlogOutline(formData.theme, formData.tone, generationMode === 'contextual');
+      const newSections = outline.sections.slice(0, 5).map((section, index) => ({
         title: section.title,
-        content: section.content,
+        content: '',
         sortOrder: index,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -234,6 +252,28 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     setSections(newSections);
   };
 
+  const handleModeChange = (newMode: GenerationMode) => {
+    // 生成中の場合は中止
+    if (generationState.isGenerating) {
+      handleAbortGeneration(sections.findIndex(s => !s.content));
+    }
+
+    // 状態をリセット
+    setGenerationState({
+      mode: newMode,
+      isGenerating: false,
+      abortController: null
+    });
+    
+    setGenerationMode(newMode);
+    
+    // トースト表示
+    setToast({
+      type: 'info',
+      message: `${newMode === 'simple' ? 'シンプル' : 'コンテキスト'}モードに切り替えました`
+    });
+  };
+
   const handleGenerateContent = async (index: number) => {
     if (!formData.theme || !sections[index].title) {
       setToast({
@@ -243,109 +283,121 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       return;
     }
 
-    if (formData.theme.length < 5) {
-      setToast({
-        type: 'error',
-        message: 'テーマは5文字以上で入力してください'
-      });
-      return;
-    }
-
-    if (sections[index].title.length < 5) {
-      setToast({
-        type: 'error',
-        message: 'セクションタイトルは5文字以上で入力してください'
-      });
-      return;
-    }
-
-    if (generatingSections.includes(index)) {
-      setToast({
-        type: 'info',
-        message: `セクション「${sections[index].title}」は現在生成中です`
-      });
-      return;
-    }
-
     const controller = new AbortController();
-    setAbortControllers(prev => ({ ...prev, [index]: controller }));
+    setGenerationState(prev => ({
+      ...prev,
+      isGenerating: true,
+      abortController: controller
+    }));
     setGeneratingSections(prev => [...prev, index]);
-    setAbortingStates(prev => ({ ...prev, [index]: false }));
 
     try {
-      const previousSections = sections
-        .slice(0, index)
-        .map(section => ({
-          title: section.title,
-          content: section.content
-        }))
-        .filter(section => section.content.length > 0);
+      const updatedSections = [...sections];
+      updatedSections[index] = {
+        ...updatedSections[index],
+        content: '生成中...'
+      };
+      setSections(updatedSections);
 
-      const isLastSection = index === sections.length - 1;
-
-      setToast({
-        type: 'info',
-        message: `セクション「${sections[index].title}」の生成を開始します`
-      });
-
-      const content = await generateBlogContent(
-        formData.theme,
-        sections[index].title,
-        previousSections,
-        isLastSection,
-        controller.signal
-      );
-
-      if (!content || content.length < 100) {
-        throw new Error('生成された内容が不十分です。もう一度お試しください。');
+      let content: string;
+      if (generationMode === 'simple') {
+        content = await generateSimpleContent(
+          formData.theme,
+          sections[index].title,
+          controller.signal
+        );
+      } else {
+        const previousSections = sections
+          .slice(0, index)
+          .map(s => ({ title: s.title, content: s.content }));
+        content = await generateBlogContent(
+          formData.theme,
+          sections[index].title,
+          previousSections,
+          index === sections.length - 1,
+          controller.signal
+        );
       }
 
-      setSections(prev => prev.map((section, i) =>
-        i === index ? { ...section, content } : section
-      ));
-
-      setToast({
-        type: 'success',
-        message: `セクション「${sections[index].title}」の生成が完了しました`
-      });
+      if (!controller.signal.aborted) {
+        updatedSections[index] = {
+          ...updatedSections[index],
+          content
+        };
+        setSections(updatedSections);
+      }
     } catch (error) {
-      console.error('Content generation error:', error);
-      
-      if (error.message === 'リクエストが中止されました') {
-        setToast({
-          type: 'info',
-          message: `セクション「${sections[index].title}」の生成を中止しました`
-        });
-      } else {
+      if (!controller.signal.aborted) {
         setToast({
           type: 'error',
-          message: `エラーが発生しました: ${error.message || '不明なエラー'}`
+          message: error instanceof Error ? error.message : '生成中にエラーが発生しました'
         });
+        // エラー時は空の内容に戻す
+        const updatedSections = [...sections];
+        updatedSections[index] = {
+          ...updatedSections[index],
+          content: ''
+        };
+        setSections(updatedSections);
       }
     } finally {
-      setGeneratingSections(prev => prev.filter(i => i !== index));
-      setAbortControllers(prev => {
-        const newControllers = { ...prev };
-        delete newControllers[index];
-        return newControllers;
-      });
-      setAbortingStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[index];
-        return newStates;
-      });
+      if (!controller.signal.aborted) {
+        setGenerationState(prev => ({
+          ...prev,
+          isGenerating: false,
+          abortController: null
+        }));
+        setGeneratingSections(prev => prev.filter(i => i !== index));
+        setAbortingStates(prev => ({ ...prev, [index]: false }));
+      }
     }
   };
 
   const handleAbortGeneration = (index: number) => {
-    const controller = abortControllers[index];
-    if (controller) {
+    const controller = generationState.abortController;
+    if (controller && !controller.signal.aborted) {
       setAbortingStates(prev => ({ ...prev, [index]: true }));
-      controller.abort();
-      setToast({ 
-        type: 'info', 
-        message: `セクション「${sections[index].title}」の生成を中止しています...` 
-      });
+      
+      if (generationMode === 'contextual') {
+        // コンテキストモードの場合は、それ以降のセクションの生成も中止
+        controller.abort();
+        const updatedSections = [...sections];
+        for (let i = index; i < sections.length; i++) {
+          updatedSections[i] = {
+            ...updatedSections[i],
+            content: '' // コンテンツをクリア
+          };
+        }
+        setSections(updatedSections);
+        
+        setToast({ 
+          type: 'info', 
+          message: `セクション「${sections[index].title}」以降の生成を中止しました` 
+        });
+      } else {
+        // シンプルモードの場合は、選択したセクションのみ中止
+        controller.abort();
+        const updatedSections = [...sections];
+        updatedSections[index] = {
+          ...updatedSections[index],
+          content: '' // コンテンツをクリア
+        };
+        setSections(updatedSections);
+
+        setToast({ 
+          type: 'info', 
+          message: `セクション「${sections[index].title}」の生成を中止しました` 
+        });
+      }
+
+      // 状態をリセット
+      setGenerationState(prev => ({
+        ...prev,
+        isGenerating: false,
+        abortController: null
+      }));
+      setGeneratingSections(prev => prev.filter(i => i !== index));
+      setAbortingStates(prev => ({ ...prev, [index]: false }));
     }
   };
 
@@ -446,6 +498,40 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             )}
           </div>
 
+          <div className="space-y-2">
+            <label className="text-sm font-medium block">生成モード</label>
+            <div className="flex gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="generationMode"
+                  value="simple"
+                  checked={generationMode === 'simple'}
+                  onChange={(e) => handleModeChange('simple')}
+                  className="mr-2"
+                />
+                <div>
+                  <span className="font-medium">シンプルモード</span>
+                  <p className="text-sm text-gray-500">各セクションを個別に生成（高速）</p>
+                </div>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="generationMode"
+                  value="contextual"
+                  checked={generationMode === 'contextual'}
+                  onChange={(e) => handleModeChange('contextual')}
+                  className="mr-2"
+                />
+                <div>
+                  <span className="font-medium">コンテキストモード</span>
+                  <p className="text-sm text-gray-500">文脈を考慮して生成（高品質）</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
             <Input
               type="text"
@@ -542,10 +628,14 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
                   <Button
                     type="button"
                     onClick={() => handleGenerateContent(index)}
-                    disabled={!section.title || !formData.theme}
-                    className="whitespace-nowrap min-w-[120px] bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+                    disabled={!section.title || !formData.theme || generatingSections.includes(index)}
+                    className={`whitespace-nowrap min-w-[120px] text-white ${
+                      generationMode === 'simple'
+                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 transform hover:scale-105 transition-all'
+                        : 'bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 animate-pulse hover:animate-none'
+                    }`}
                   >
-                    <Wand2 className="h-4 w-4 mr-2" />
+                    <Wand2 className={`h-4 w-4 mr-2 ${generationMode === 'contextual' ? 'animate-spin-slow' : ''}`} />
                     内容生成
                   </Button>
                 )}

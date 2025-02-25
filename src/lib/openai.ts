@@ -2,6 +2,8 @@ import { WritingTone } from '../types';
 import { ArticleStructure } from './models';
 import { supabase } from '../supabase';
 
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+
 /**
  * OpenAI APIを呼び出す共通関数
  */
@@ -12,36 +14,50 @@ async function callOpenAIFunction(messages: any[], options?: any, signal?: Abort
 
   while (retryCount <= maxRetries) {
     try {
-      // 中止シグナルのチェック
       if (signal?.aborted) {
         console.log('🛑 OpenAI API リクエストが中止されました');
         throw new Error('リクエストが中止されました');
       }
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4-mini',
+      console.log('📝 リクエスト開始:', { messages, options });
+
+      const { data, error } = await supabase.functions.invoke('openai', {
+        body: {
           messages,
-          ...options,
-        }),
-        signal, // AbortSignalを渡す
+          ...options
+        }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ OpenAI APIエラー:', error);
-        throw new Error(error.error?.message || 'OpenAI APIリクエストが失敗しました');
+      console.log('🔍 Supabase レスポンス:', { data, error });
+
+      if (error) {
+        console.error('❌ Supabase Function エラー:', error);
+        if (error.message.includes('rate_limit')) {
+          throw new Error('APIの利用制限に達しました。しばらく待ってから再試行してください。');
+        } else if (error.message.includes('context_length')) {
+          throw new Error('入力テキストが長すぎます。内容を短くしてください。');
+        } else if (error.message.includes('invalid_api_key')) {
+          throw new Error('API認証に失敗しました。システム管理者に連絡してください。');
+        }
+        throw new Error(`APIリクエストが失敗しました: ${error.message}`);
       }
 
-      const data = await response.json();
+      if (!data) {
+        console.error('❌ データが空です');
+        throw new Error('APIからの応答が空です');
+      }
+
+      if (!data.content) {
+        console.error('❌ 不正なレスポンス形式:', data);
+        throw new Error('APIからの応答が不正な形式です');
+      }
+
       console.log('✅ OpenAI APIレスポンス:', data);
-      return data.choices[0].message.content;
+      return data.content;
 
     } catch (error: any) {
+      console.error('🚨 エラー詳細:', error);
+
       if (error.name === 'AbortError' || signal?.aborted) {
         console.log('🛑 リクエストが中止されました - 処理を終了します');
         throw new Error('リクエストが中止されました');
@@ -85,24 +101,26 @@ export async function sendChatMessageWithSystem(
 /**
  * ブログのアウトラインを生成する
  */
-export async function generateBlogOutline(theme: string, tone: WritingTone) {
+export async function generateBlogOutline(theme: string, tone: WritingTone, isContextMode: boolean = false) {
   try {
+    console.log(`アウトライン生成開始 - モード: ${isContextMode ? 'コンテキスト' : 'シンプル'}`);
     const messages = [
       {
         role: "system",
         content: `あなたはブログ記事のアウトライン生成を支援するアシスタントです。
 以下の条件に従ってアウトラインを生成してください：
 - 文体は${tone}を使用
-- 2-5個のセクションを提案（最後のセクションは必ず「まとめ」または結論を示すセクション）
+- 2-5個のセクションを提案
+${isContextMode ? '- 最後のセクションは必ず「まとめ」または結論を示すセクション' : ''}
 - 各セクションにはタイトルと簡単な説明を含める
-- 最後のセクションは記事全体の結論やまとめとなるように設計
+${isContextMode ? '- 最後のセクションは記事全体の結論やまとめとなるように設計' : ''}
 - JSONフォーマットで返答（以下の形式）：
 {
   "sections": [
     {
       "title": "セクションタイトル",
       "content": "セクションの説明",
-      "type": "main" | "conclusion"  // 最後のセクションは必ず"conclusion"
+      "type": "${isContextMode ? 'main | conclusion' : 'main'}"  ${isContextMode ? '// 最後のセクションは必ず"conclusion"' : ''}
     }
   ]
 }`
@@ -111,15 +129,62 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
         role: "user",
         content: `テーマ: ${theme}
 上記のテーマについて、ブログ記事のアウトラインを生成してください。
-最後のセクションは必ず記事全体のまとめや結論となるようにしてください。`
+${isContextMode ? '最後のセクションは必ず記事全体のまとめや結論となるようにしてください。' : ''}`
       }
     ];
 
     const response = await callOpenAIFunction(messages);
-    return validateOutlineResponse(response);
+    const validatedResponse = validateOutlineResponse(response, isContextMode);
+    console.log('生成されたアウトライン:', JSON.stringify(validatedResponse, null, 2));
+    return validatedResponse;
   } catch (error) {
     console.error('OpenAI API error:', error);
     throw new Error('アウトライン生成に失敗しました');
+  }
+}
+
+/**
+ * OpenAIのレスポンスを検証し、適切なフォーマットに変換する
+ */
+function validateOutlineResponse(response: string, isContextMode: boolean) {
+  try {
+    // 文字列をJSONとしてパース
+    const parsed = JSON.parse(response);
+
+    // sectionsプロパティの存在確認
+    if (!parsed.sections || !Array.isArray(parsed.sections)) {
+      throw new Error('Invalid response format: sections array is missing');
+    }
+
+    // 各セクションの形式を検証
+    parsed.sections.forEach((section: any, index: number) => {
+      if (!section.title || typeof section.title !== 'string') {
+        throw new Error(`Invalid section ${index + 1}: title is missing or invalid`);
+      }
+      if (!section.content || typeof section.content !== 'string') {
+        throw new Error(`Invalid section ${index + 1}: content is missing or invalid`);
+      }
+      
+      // コンテキストモードの場合、typeプロパティを検証
+      if (isContextMode) {
+        if (!section.type || (section.type !== 'main' && section.type !== 'conclusion')) {
+          // 最後のセクションはconclusionである必要がある
+          section.type = index === parsed.sections.length - 1 ? 'conclusion' : 'main';
+        }
+      } else {
+        section.type = 'main';
+      }
+    });
+
+    // コンテキストモードの場合、最後のセクションがconclusion typeであることを確認
+    if (isContextMode && parsed.sections.length > 0) {
+      parsed.sections[parsed.sections.length - 1].type = 'conclusion';
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Response validation error:', error);
+    throw new Error('Invalid outline format');
   }
 }
 
@@ -352,172 +417,125 @@ export async function generateArticleContent(
       }
     ];
 
-    structure.introduction.content = await callOpenAIFunction(introMessages, {
-      max_tokens: 1000,
-      temperature: 0.7
-    });
-    console.log('導入部の生成が完了しました');
+    const introContent = await callOpenAIFunction(introMessages);
+    structure.introduction.content = introContent;
 
     // メインセクションの生成
-    let previousContext = structure.introduction.content;
-    for (let i = 0; i < structure.mainSections.length; i++) {
-      const section = structure.mainSections[i];
-      console.log(`メインセクション ${i + 1}/${structure.mainSections.length}「${section.title}」の生成を開始...`);
+    for (let i = 0; i < sections.length - 1; i++) {
+      const section = sections[i];
+      const nextSection = sections[i + 1];
+      console.log(`セクション「${section.title}」の生成を開始...`);
 
-      const mainSectionMessages = [
+      const sectionMessages = [
         {
           role: "system",
-          content: `あなたはブログ記事のメインセクションを生成するアシスタントです。
+          content: `あなたはブログ記事のセクションを生成するアシスタントです。
 以下の条件に従って内容を生成してください：
-- 文体は${tone}を使用
-- ${section.targetLength.min}〜${section.targetLength.max}文字
-- 前のセクションの内容を踏まえて展開
-- 具体例や説明を含める
-- 読みやすく、わかりやすい文章を心がける
-- 次のセクションへの自然な繋がりを意識
-- 必ず完結した形で終わらせる
-- 途中で文章が切れないようにする`
+- マークダウン形式で出力
+- ${structure[section.type].targetLength.min}〜${structure[section.type].targetLength.max}文字
+- 段落は必ず「。」で終わるようにする
+- 箇条書きの項目は完結した文で終わるようにする
+- 文章全体が自然に完結するようにする
+- テーマに関連する具体的な事例や数値データを含める
+- 読者にとって実践的で有用な情報を提供する
+- 論理的な展開を心がける
+- 客観的な事実に基づいて説明する
+
+このセクションは${section.type === 'main' ? 'メインセクション' : '結論セクション'}として、${section.title}について詳しく説明してください。`
         },
         {
           role: "user",
-          content: `タイトル: ${title}
-テーマ: ${theme}
+          content: `テーマ: ${theme}
 セクションタイトル: ${section.title}
-前のセクションの内容:
-${previousContext}
-
-上記の情報に基づいて、このセクションの内容を生成してください。`
+${structure[section.type].targetLength.min}〜${structure[section.type].targetLength.max}文字の範囲で、${section.title}について詳しく説明してください。`
         }
       ];
 
-      section.content = await callOpenAIFunction(mainSectionMessages, {
-        max_tokens: 2000,
-        temperature: 0.7
-      });
-      previousContext = section.content;
-      console.log(`メインセクション ${i + 1} の生成が完了しました`);
-
-      // セクション間に適度な待機時間を設定
-      if (i < structure.mainSections.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      const sectionContent = await callOpenAIFunction(sectionMessages);
+      structure[section.type].content = sectionContent;
+      console.log(`セクション「${section.title}」の生成が完了しました`);
     }
 
-    // まとめの生成（最終セクション）
-    console.log('まとめセクションの生成を開始...');
-    const fullContext = [
-      structure.introduction.content,
-      ...structure.mainSections.map(section => section.content)
-    ].join('\n\n');
-
-    structure.conclusion.fullContext = fullContext;
+    // 結論セクションの生成
     const conclusionMessages = [
       {
         role: "system",
-        content: `あなたはブログ記事のまとめセクションを生成するアシスタントです。
-これは記事全体の最後のセクションとして、以下の条件に従って生成してください：
+        content: `あなたはブログ記事の結論セクションを生成するアシスタントです。
+以下の条件に従って結論を生成してください：
 - 文体は${tone}を使用
-- ${structure.conclusion.targetLength.min}〜${structure.conclusion.targetLength.max}文字
-- 記事全体の要点を簡潔にまとめる
-- これまでの内容を総括
-- 読者への具体的なアクションや次のステップを提案
-- 記事全体の結論を明確に示す
-- 必ず完結した形で終わらせる
-- 途中で文章が切れないようにする`
+- 200〜300文字の範囲で生成
+- 記事の内容を総括し、読者に対するアクションプランを含める
+
+このセクションは結論セクションとして、${sections[sections.length - 1].title}について詳しく説明してください。`
       },
       {
         role: "user",
-        content: `タイトル: ${title}
-テーマ: ${theme}
-まとめのタイトル: ${structure.conclusion.title}
-これまでの記事の内容:
-${fullContext}
-
-上記の内容を踏まえて、記事全体のまとめとなる最終セクションを生成してください。
-このセクションは記事全体の結論として、読者に明確なメッセージを残すように作成してください。`
+        content: `テーマ: ${theme}
+結論セクションのタイトル: ${sections[sections.length - 1].title}
+上記の情報に基づいて、結論を生成してください。`
       }
     ];
 
-    structure.conclusion.content = await callOpenAIFunction(conclusionMessages, {
-      max_tokens: 1000,
-      temperature: 0.7
-    });
-    console.log('まとめセクションの生成が完了しました');
+    const conclusionContent = await callOpenAIFunction(conclusionMessages);
+    structure.conclusion.content = conclusionContent;
+    console.log('結論セクションの生成が完了しました');
 
-    // 生成された内容の検証
-    const validateContent = (content: string, minLength: number, maxLength: number) => {
-      if (!content || content.length < minLength) {
-        throw new Error(`生成された内容が短すぎます（${content.length}文字）`);
-      }
-      if (content.length > maxLength) {
-        throw new Error(`生成された内容が長すぎます（${content.length}文字）`);
-      }
-    };
+    // 記事全体の連携
+    structure.conclusion.fullContext = sections.map(section => section.content).join('\n');
 
-    validateContent(structure.introduction.content, structure.introduction.targetLength.min, structure.introduction.targetLength.max);
-    structure.mainSections.forEach(section => {
-      validateContent(section.content, section.targetLength.min, section.targetLength.max);
-    });
-    validateContent(structure.conclusion.content, structure.conclusion.targetLength.min, structure.conclusion.targetLength.max);
-
-    return {
-      title,
-      theme,
-      sections: [
-        { title: structure.introduction.title, content: structure.introduction.content, type: 'main' },
-        ...structure.mainSections.map(section => ({
-          title: section.title,
-          content: section.content,
-          type: 'main'
-        })),
-        { 
-          title: structure.conclusion.title, 
-          content: structure.conclusion.content,
-          type: 'conclusion'
-        }
-      ]
-    };
-
+    return structure;
   } catch (error) {
-    console.error('記事生成中にエラーが発生しました:', error);
-    throw new Error('記事の生成に失敗しました: ' + (error as Error).message);
+    console.error('OpenAI API error:', error);
+    throw new Error('記事の生成に失敗しました');
   }
 }
 
-// レスポンスの型定義
-export interface GeneratedOutline {
-  sections: {
-    title: string;
-    content: string;
-    type: 'main' | 'conclusion';
-  }[];
-}
+/**
+ * シンプルモードでブログコンテンツを生成する
+ */
+export async function generateSimpleContent(
+  theme: string,
+  sectionTitle: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const systemPrompt = `あなたはブログ記事のセクションを生成するアシスタントです。
+以下の条件に従って内容を生成してください：
+- マークダウン形式で出力
+- 800字から1200字の範囲で生成
+- 段落は必ず「。」で終わるようにする
+- 箇条書きの項目は完結した文で終わるようにする
+- 文章全体が自然に完結するようにする
+- テーマに関連する具体的な事例や数値データを含める
+- 読者にとって実践的で有用な情報を提供する
+- 論理的な展開を心がける
+- 客観的な事実に基づいて説明する
+- 必ず完結した文章で終わるようにする`;
 
-// レスポンスのバリデーション
-export function validateOutlineResponse(response: string): GeneratedOutline {
-  try {
-    const parsed = JSON.parse(response);
-    if (!parsed.sections || !Array.isArray(parsed.sections)) {
-      throw new Error('Invalid outline format');
+  const messages = [
+    { role: "system", content: systemPrompt },
+    {
+      role: "user",
+      content: `テーマ: ${theme}
+セクションタイトル: ${sectionTitle}
+
+このセクションの内容を、800字から1200字の範囲で生成してください。
+必ず完結した文章になるようにしてください。`
     }
+  ];
 
-    // 最後のセクションがconclusion typeであることを確認
-    const lastSection = parsed.sections[parsed.sections.length - 1];
-    if (!lastSection || lastSection.type !== 'conclusion') {
-      throw new Error('Last section must be a conclusion');
-    }
-
-    return parsed;
-  } catch (error) {
-    console.error('Response validation error:', error);
-    throw new Error('生成されたアウトラインの形式が不正です');
-  }
+  return callOpenAIFunction(messages, {
+    max_tokens: 1500,
+    temperature: 0.7,
+    presence_penalty: 0.3,
+    frequency_penalty: 0.3,
+    stop: ["。\n\n"] // 段落の終わりで生成を停止
+  }, signal);
 }
 
 /**
  * タイトルを生成する
  */
-export async function generateTitle(theme: string, content?: string): Promise<string[]> {
+export async function generateTitle(theme: string): Promise<string[]> {
   try {
     const messages = [
       {
@@ -529,7 +547,7 @@ export async function generateTitle(theme: string, content?: string): Promise<st
         content: `以下の条件でブログ記事のタイトルを3つ提案してください：
         
 テーマ: ${theme}
-${content ? `内容の一部: ${content}\n` : ''}
+
 条件：
 - 読者の興味を引く魅力的なタイトル
 - SEOを意識した検索されやすいタイトル
@@ -549,8 +567,8 @@ ${content ? `内容の一部: ${content}\n` : ''}
     // レスポンスからタイトルを抽出
     const titles = response
       .split('\n')
-      .filter((line: string) => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
-      .map((line: string) => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
+      .filter(line => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
+      .map(line => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
 
     return titles;
   } catch (error) {
