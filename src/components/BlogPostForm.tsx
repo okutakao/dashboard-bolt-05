@@ -1,5 +1,5 @@
-import { useState, useEffect, ChangeEvent } from 'react';
-import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Download, Loader2 } from 'lucide-react';
+import { useState, useEffect, ChangeEvent, useRef } from 'react';
+import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Download, Loader2, X } from 'lucide-react';
 import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
@@ -24,10 +24,9 @@ interface FormData {
   status: 'draft' | 'published';
 }
 
-interface GenerationQueueItem {
-  index: number;
-  theme: string;
-  title: string;
+interface Toast {
+  type: 'success' | 'error' | 'info';
+  message: string;
 }
 
 export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
@@ -40,7 +39,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   };
 
   const [post, setPost] = useState<BlogPost | null>(null);
-  const [sections, setSections] = useState<FormSection[]>([]);
+  const [sections, setSections] = useState<FormSection[]>([defaultSection]);
   const [formData, setFormData] = useState<FormData>({
     title: '',
     theme: '',
@@ -49,15 +48,15 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   });
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [generatingTitle, setGeneratingTitle] = useState(false);
   const [generatingOutline, setGeneratingOutline] = useState(false);
-  const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
-  const [generationQueue, setGenerationQueue] = useState<GenerationQueueItem[]>([]);
-  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+  const [abortControllers, setAbortControllers] = useState<{ [key: number]: AbortController }>({});
+  const [abortingStates, setAbortingStates] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -90,82 +89,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
 
     fetchPost();
   }, [postId, user.id]);
-
-  // 生成キューの処理
-  useEffect(() => {
-    const processQueue = async () => {
-      // デバッグログ追加
-      console.log('キュー処理開始:', {
-        queueLength: generationQueue.length,
-        isProcessing: isProcessingQueue
-      });
-
-      // キューが空の場合は処理を終了
-      if (generationQueue.length === 0) {
-        setIsProcessingQueue(false);
-        return;
-      }
-
-      // 既に処理中の場合は何もしない
-      if (isProcessingQueue) {
-        console.log('既に処理中のため待機');
-        return;
-      }
-
-      setIsProcessingQueue(true);
-
-      try {
-        // キューの先頭のアイテムを処理
-        const item = generationQueue[0];
-        console.log('処理するアイテム:', item);
-        
-        // 生成中のセクションを更新
-        setGeneratingSections(prev => {
-          const updated = [...prev, item.index];
-          console.log('生成中セクション更新:', updated);
-          return updated;
-        });
-
-        const result = await generateBlogContent(item.theme, item.title);
-        
-        // セクションの内容を更新
-        setSections(prev => {
-          const newSections = [...prev];
-          newSections[item.index] = {
-            ...newSections[item.index],
-            content: result,
-            updatedAt: new Date().toISOString()
-          };
-          return newSections;
-        });
-
-        setToast({ type: 'success', message: `セクション「${item.title}」の内容を生成しました` });
-      } catch (error) {
-        console.error('Error generating content:', error);
-        setToast({ type: 'error', message: `セクションの生成中にエラーが発生しました` });
-      } finally {
-        // 処理が完了したアイテムをキューから削除
-        setGenerationQueue(prev => {
-          const updated = prev.slice(1);
-          console.log('キュー更新:', updated);
-          return updated;
-        });
-        
-        // 生成中のセクションから削除
-        setGeneratingSections(prev => {
-          const updated = prev.filter(index => index !== generationQueue[0].index);
-          console.log('生成中セクション更新（完了）:', updated);
-          return updated;
-        });
-        
-        // 次のキュー処理のために状態をリセット
-        setIsProcessingQueue(false);
-      }
-    };
-
-    // キューの処理を開始
-    processQueue();
-  }, [generationQueue, isProcessingQueue]);
 
   const validateForm = () => {
     if (!formData.title.trim()) return false;
@@ -313,23 +236,43 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
 
   const handleGenerateContent = async (index: number) => {
     if (!formData.theme || !sections[index].title) {
-      setToast({ type: 'error', message: 'テーマとセクションタイトルを入力してください' });
-      return;
-    }
-
-    // 既に生成中かチェック
-    if (generatingSections.includes(index)) {
-      setToast({ 
-        type: 'info', 
-        message: `セクション「${sections[index].title}」は現在生成中です` 
+      setToast({
+        type: 'error',
+        message: 'テーマとセクションタイトルを入力してください'
       });
       return;
     }
 
+    if (formData.theme.length < 5) {
+      setToast({
+        type: 'error',
+        message: 'テーマは5文字以上で入力してください'
+      });
+      return;
+    }
+
+    if (sections[index].title.length < 5) {
+      setToast({
+        type: 'error',
+        message: 'セクションタイトルは5文字以上で入力してください'
+      });
+      return;
+    }
+
+    if (generatingSections.includes(index)) {
+      setToast({
+        type: 'info',
+        message: `セクション「${sections[index].title}」は現在生成中です`
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    setAbortControllers(prev => ({ ...prev, [index]: controller }));
     setGeneratingSections(prev => [...prev, index]);
+    setAbortingStates(prev => ({ ...prev, [index]: false }));
 
     try {
-      // これまでのセクションの内容を収集
       const previousSections = sections
         .slice(0, index)
         .map(section => ({
@@ -338,56 +281,71 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         }))
         .filter(section => section.content.length > 0);
 
-      // このセクションが最後のセクションかどうかを判定
       const isLastSection = index === sections.length - 1;
+
+      setToast({
+        type: 'info',
+        message: `セクション「${sections[index].title}」の生成を開始します`
+      });
 
       const content = await generateBlogContent(
         formData.theme,
         sections[index].title,
         previousSections,
-        isLastSection
+        isLastSection,
+        controller.signal
       );
 
-      setSections(prev => prev.map((section, i) => 
+      if (!content || content.length < 100) {
+        throw new Error('生成された内容が不十分です。もう一度お試しください。');
+      }
+
+      setSections(prev => prev.map((section, i) =>
         i === index ? { ...section, content } : section
       ));
 
-      setToast({ 
-        type: 'success', 
-        message: `セクション「${sections[index].title}」の生成が完了しました` 
+      setToast({
+        type: 'success',
+        message: `セクション「${sections[index].title}」の生成が完了しました`
       });
     } catch (error) {
-      console.error('コンテンツ生成エラー:', error);
-      setToast({ 
-        type: 'error', 
-        message: `セクション「${sections[index].title}」の生成中にエラーが発生しました` 
-      });
+      console.error('Content generation error:', error);
+      
+      if (error.message === 'リクエストが中止されました') {
+        setToast({
+          type: 'info',
+          message: `セクション「${sections[index].title}」の生成を中止しました`
+        });
+      } else {
+        setToast({
+          type: 'error',
+          message: `エラーが発生しました: ${error.message || '不明なエラー'}`
+        });
+      }
     } finally {
       setGeneratingSections(prev => prev.filter(i => i !== index));
+      setAbortControllers(prev => {
+        const newControllers = { ...prev };
+        delete newControllers[index];
+        return newControllers;
+      });
+      setAbortingStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[index];
+        return newStates;
+      });
     }
   };
 
-  const handleGenerateAllContents = async () => {
-    if (!formData.theme) {
-      setToast({ type: 'error', message: 'テーマを入力してください' });
-      return;
-    }
-
-    // 生成が必要なセクションを特定
-    const sectionsToGenerate = sections
-      .map((section, index) => ({ section, index }))
-      .filter(({ section }) => section.title && !section.content);
-
-    if (sectionsToGenerate.length === 0) {
-      setToast({ type: 'info', message: '生成が必要なセクションがありません' });
-      return;
-    }
-
-    // 生成開始
-    for (const { section, index } of sectionsToGenerate) {
-      if (!generatingSections.includes(index)) {
-        await handleGenerateContent(index);
-      }
+  const handleAbortGeneration = (index: number) => {
+    const controller = abortControllers[index];
+    if (controller) {
+      setAbortingStates(prev => ({ ...prev, [index]: true }));
+      controller.abort();
+      setToast({ 
+        type: 'info', 
+        message: `セクション「${sections[index].title}」の生成を中止しています...` 
+      });
     }
   };
 
@@ -518,29 +476,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             </Button>
           </div>
 
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              onClick={handleGenerateAllContents}
-              disabled={!formData.theme || sections.length === 0 || isProcessingQueue}
-              className={`whitespace-nowrap min-w-[160px] ${
-                isProcessingQueue ? 'bg-orange-500' : 'bg-gradient-to-r from-orange-500 to-red-500'
-              } text-white hover:from-orange-600 hover:to-red-600`}
-            >
-              {isProcessingQueue ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  生成中...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  全セクション一括生成
-                </>
-              )}
-            </Button>
-          </div>
-
           <Select
             value={formData.tone}
             onValueChange={(value: FormData['tone']) => setFormData({ ...formData, tone: value })}
@@ -580,32 +515,40 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
                   onChange={(e) => handleSectionTitleChange(index, e)}
                   className="flex-1"
                 />
-                <Button
-                  type="button"
-                  onClick={() => handleGenerateContent(index)}
-                  disabled={
-                    !section.title || 
-                    !formData.theme ||
-                    generatingSections.includes(index)
-                  }
-                  className={`whitespace-nowrap min-w-[120px] ${
-                    generatingSections.includes(index)
-                      ? 'bg-yellow-500'
-                      : 'bg-gradient-to-r from-green-500 to-emerald-500'
-                  } text-white hover:from-green-600 hover:to-emerald-600`}
-                >
-                  {generatingSections.includes(index) ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      生成中...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="h-4 w-4 mr-2" />
-                      内容生成
-                    </>
-                  )}
-                </Button>
+                {generatingSections.includes(index) ? (
+                  <Button
+                    type="button"
+                    onClick={() => handleAbortGeneration(index)}
+                    disabled={abortingStates[index]}
+                    className={`whitespace-nowrap min-w-[120px] ${
+                      abortingStates[index] 
+                        ? 'bg-gray-500' 
+                        : 'bg-red-500 hover:bg-red-600'
+                    } text-white`}
+                  >
+                    {abortingStates[index] ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        中止中...
+                      </>
+                    ) : (
+                      <>
+                        <X className="h-4 w-4 mr-2" />
+                        中止
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => handleGenerateContent(index)}
+                    disabled={!section.title || !formData.theme}
+                    className="whitespace-nowrap min-w-[120px] bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-600 hover:to-emerald-600"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    内容生成
+                  </Button>
+                )}
               </div>
 
               <Textarea

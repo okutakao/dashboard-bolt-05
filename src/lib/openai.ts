@@ -5,65 +5,61 @@ import { supabase } from '../supabase';
 /**
  * OpenAI APIを呼び出す共通関数
  */
-async function callOpenAIFunction(messages: any[], options?: any) {
+async function callOpenAIFunction(messages: any[], options?: any, signal?: AbortSignal) {
   let retryCount = 0;
   const maxRetries = 3;
   const baseDelay = 1000;
 
-  while (retryCount < maxRetries) {
+  while (retryCount <= maxRetries) {
     try {
-      console.log('Calling OpenAI Function...');
-      console.log('Messages:', messages);
+      // 中止シグナルのチェック
+      if (signal?.aborted) {
+        console.log('🛑 OpenAI API リクエストが中止されました');
+        throw new Error('リクエストが中止されました');
+      }
 
-      const { data, error } = await supabase.functions.invoke('openai', {
-        body: { 
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4-mini',
           messages,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            frequency_penalty: 0.0,
-            presence_penalty: 0.0,
-            max_tokens: 4000, // トークン制限を増加
-            ...options
-          }
-        }
+          ...options,
+        }),
+        signal, // AbortSignalを渡す
       });
 
-      if (error) {
-        console.error('Supabase Functions Error:', error);
-        if (error.message?.includes('rate_limit_exceeded')) {
-          const delay = baseDelay * Math.pow(2, retryCount);
-          console.log(`Rate limit exceeded. Retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          retryCount++;
-          continue;
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ OpenAI APIエラー:', error);
+        throw new Error(error.error?.message || 'OpenAI APIリクエストが失敗しました');
+      }
+
+      const data = await response.json();
+      console.log('✅ OpenAI APIレスポンス:', data);
+      return data.choices[0].message.content;
+
+    } catch (error: any) {
+      if (error.name === 'AbortError' || signal?.aborted) {
+        console.log('🛑 リクエストが中止されました - 処理を終了します');
+        throw new Error('リクエストが中止されました');
+      }
+
+      if (retryCount === maxRetries) {
+        console.error(`❌ 最大リトライ回数(${maxRetries})に到達しました`);
         throw error;
       }
 
-      // 生成された内容の検証
-      if (!data.content || typeof data.content !== 'string' || data.content.length < 10) {
-        throw new Error('生成された内容が不適切です');
-      }
-
-      console.log('API Response:', data);
-      return data.content;
-    } catch (error) {
-      console.error('API Call Error:', error);
-      
-      if (retryCount < maxRetries - 1) {
-        retryCount++;
-        const delay = baseDelay * Math.pow(2, retryCount);
-        console.log(`Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-      
-      throw new Error('APIリクエストが失敗しました: ' + (error as Error).message);
+      const delay = baseDelay * Math.pow(2, retryCount);
+      console.log(`⏳ ${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      retryCount++;
     }
   }
 
-  throw new Error('最大リトライ回数を超えました');
+  throw new Error('予期せぬエラーが発生しました');
 }
 
 /**
@@ -139,7 +135,7 @@ export async function generateBlogContent(
   sectionTitle: string,
   previousSections: Array<{ title: string; content: string }> = [],
   isLastSection: boolean = false,
-  isFirstSection: boolean = previousSections.length === 0
+  signal?: AbortSignal
 ) {
   const maxRetries = 3;
   const retryDelay = 1000;
@@ -149,20 +145,27 @@ export async function generateBlogContent(
 
   const generateWithRetry = async (retryCount: number): Promise<string> => {
     try {
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
+
       const previousContentsContext = previousSections
         .map(section => `${section.title}:\n${section.content}\n`)
         .join('\n');
 
       // 基本的な内容生成
-      const response = await generateBaseContent(theme, sectionTitle, previousContentsContext, isLastSection, isFirstSection);
+      const response = await generateBaseContent(theme, sectionTitle, previousContentsContext, isLastSection, previousSections.length === 0, signal);
       
       // 生成された内容の後処理
-      const processedContent = await postProcessContent(response, retryCount);
+      const processedContent = await postProcessContent(response, retryCount, signal);
       
       return processedContent;
 
     } catch (error) {
       if (error instanceof Error) {
+        if (error.message === 'AbortError') {
+          throw error;
+        }
         // APIレート制限エラーの場合
         if (error.message.includes('rate_limit') && retryCount < maxRetries) {
           console.log(`APIレート制限により失敗。${retryDelay}ms後にリトライします... (${retryCount + 1}/${maxRetries})`);
@@ -181,8 +184,13 @@ export async function generateBlogContent(
     sectionTitle: string,
     previousContentsContext: string,
     isLastSection: boolean,
-    isFirstSection: boolean
+    isFirstSection: boolean,
+    signal?: AbortSignal
   ): Promise<string> => {
+    if (signal?.aborted) {
+      throw new Error('AbortError');
+    }
+
     const systemPrompt = `あなたはブログ記事のセクションを生成するアシスタントです。
 以下の条件に従って内容を生成してください：
 - マークダウン形式で出力
@@ -214,11 +222,15 @@ ${!isFirstSection && previousContentsContext ? '\n前のセクションの内容
       temperature: 0.7,
       presence_penalty: 0.3,
       frequency_penalty: 0.3
-    });
+    }, signal);
   };
 
   // 生成された内容の後処理を行う関数
-  const postProcessContent = async (content: string, retryCount: number): Promise<string> => {
+  const postProcessContent = async (content: string, retryCount: number, signal?: AbortSignal): Promise<string> => {
+    if (signal?.aborted) {
+      throw new Error('AbortError');
+    }
+
     let processedContent = content;
     let needsAdjustment = false;
 
@@ -234,7 +246,7 @@ ${content}`;
         processedContent = await callOpenAIFunction([
           { role: "system", content: "文章の長さを調整しつつ、内容の一貫性と完結性を保ってください。" },
           { role: "user", content: adjustmentPrompt }
-        ]);
+        ], signal);
         needsAdjustment = true;
       }
     }
@@ -260,7 +272,7 @@ ${processedContent}`;
       processedContent = await callOpenAIFunction([
         { role: "system", content: "文章の完結性を保ちながら、段落の終わり方を適切に修正してください。" },
         { role: "user", content: adjustmentPrompt }
-      ]);
+      ], signal);
       needsAdjustment = true;
     }
 
@@ -276,7 +288,7 @@ ${processedContent}`;
       processedContent = await callOpenAIFunction([
         { role: "system", content: "最終確認と微調整を行います。" },
         { role: "user", content: finalCheckPrompt }
-      ]);
+      ], signal);
     }
 
     return processedContent;
