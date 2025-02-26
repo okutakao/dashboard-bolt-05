@@ -70,3 +70,4 @@ Thumbs.db
 # Supabase
 **/supabase/.branches
 **/supabase/.temp
+.env*.local
