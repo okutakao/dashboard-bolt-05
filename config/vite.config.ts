@@ -9,18 +9,20 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: true,
     target: 'es2020',
-    rollupOptions: {
-      external: [],
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          markdown: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown']
-        }
-      }
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true
     }
   },
   optimizeDeps: {
-    include: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown'],
+    include: [
+      'zwitch',
+      'mdast-util-to-markdown',
+      'mdast-util-from-markdown',
+      'unified',
+      'unist-util-stringify-position',
+      'unist-util-visit'
+    ],
     exclude: ['@radix-ui/react-select']
   },
   server: {
@@ -29,9 +31,8 @@ export default defineConfig({
     strictPort: false
   },
   resolve: {
-    alias: {
-      'zwitch': 'zwitch/index.js'
-    }
+    dedupe: ['react', 'react-dom'],
+    mainFields: ['module', 'jsnext:main', 'jsnext', 'main']
   },
   base: './'
 });
