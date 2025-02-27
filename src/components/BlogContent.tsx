@@ -276,15 +276,14 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       let content: string;
       let filename: string;
       const baseFilename = outline.title.toLowerCase().replace(/\s+/g, '-');
-      const tone = getTone(outline.id);
 
       switch (format) {
         case 'markdown':
-          content = convertToMarkdown(outline, tone);
+          content = convertToMarkdown(outline);
           filename = `${baseFilename}.md`;
           break;
         case 'html':
-          content = convertToHTML(outline, tone);
+          content = convertToHTML(outline);
           filename = `${baseFilename}.html`;
           break;
         default:
