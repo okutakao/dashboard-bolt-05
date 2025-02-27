@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
-    include: ['zwitch', 'mdast-util-to-markdown']
+    include: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown']
   },
   server: {
     host: true,
@@ -21,9 +21,9 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
+          markdown: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown']
         },
       },
-      external: ['zwitch'],
     },
   },
   base: './'
