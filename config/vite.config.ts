@@ -6,7 +6,14 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     include: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown'],
-    force: true
+    esbuildOptions: {
+      target: 'es2020'
+    }
+  },
+  resolve: {
+    alias: {
+      'zwitch': 'zwitch/index.js'
+    }
   },
   server: {
     host: true,
@@ -17,18 +24,24 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: true,
+    target: 'es2020',
     commonjsOptions: {
       include: [/node_modules/],
-      transformMixedEsModules: true
+      transformMixedEsModules: true,
+      requireReturnsDefault: 'auto'
     },
     rollupOptions: {
+      external: [],
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          markdown: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown']
-        },
-      },
-    },
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react')) return 'vendor';
+            if (id.includes('mdast') || id.includes('zwitch')) return 'markdown';
+            return 'vendor';
+          }
+        }
+      }
+    }
   },
   base: './'
 });
