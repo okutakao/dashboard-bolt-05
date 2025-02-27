@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    exclude: ['lucide-react'],
-    include: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown']
+    include: ['zwitch', 'mdast-util-to-markdown', 'mdast-util-from-markdown'],
+    force: true
   },
   server: {
     host: true,
@@ -17,6 +17,10 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: true,
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true
+    },
     rollupOptions: {
       output: {
         manualChunks: {
