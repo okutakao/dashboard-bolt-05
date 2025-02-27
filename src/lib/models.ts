@@ -7,6 +7,7 @@ export interface BlogPost {
   theme: string;
   tone: 'casual' | 'business' | 'academic';
   status: 'draft' | 'published';
+  mode: 'simple' | 'context';
   createdAt: string;
   updatedAt: string;
   sections: BlogSection[];
@@ -47,6 +48,7 @@ export interface NewBlogPost {
   theme: string;
   tone: BlogPost['tone'];
   status: BlogPost['status'];
+  mode: 'simple' | 'context';
   createdAt: string;
   updatedAt: string;
   sections: Array<{
@@ -65,6 +67,7 @@ export interface UpdateBlogPost {
   theme: string;
   tone: BlogPost['tone'];
   status: BlogPost['status'];
+  mode: 'simple' | 'context';
   createdAt: string;
   updatedAt: string;
   sections: Array<{

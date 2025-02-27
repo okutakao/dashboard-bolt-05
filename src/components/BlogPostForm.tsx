@@ -6,23 +6,39 @@ import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 import { BlogPostPreview } from './BlogPostPreview';
-import { Toast } from './Toast';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from './ui/select';
-
-interface BlogPostFormProps {
-  postId?: string;
-  onSave?: (post: BlogPost) => void;
-  user: { id: string };
-}
+import { Toast } from "./ui/toast";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 interface FormData {
   title: string;
   theme: string;
   tone: 'casual' | 'business' | 'academic';
   status: 'draft' | 'published';
+  mode: 'simple' | 'context';
+}
+
+interface Section {
+  title: string;
+  content: string;
+  updatedAt: string;
+}
+
+interface BlogPostFormProps {
+  postId?: string;
+  onSave: (data: FormData & { sections: Section[] }) => Promise<void>;
+  user: {
+    id: string;
+    name: string;
+  };
 }
 
 interface Toast {
@@ -45,7 +61,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     title: '',
     theme: '',
     tone: 'casual',
-    status: 'draft'
+    status: 'draft',
+    mode: 'simple'
   });
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +96,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             title: fetchedPost.title,
             theme: fetchedPost.theme,
             tone: fetchedPost.tone,
-            status: fetchedPost.status
+            status: fetchedPost.status,
+            mode: 'simple'
           });
         }
       } catch (err: unknown) {
@@ -238,31 +256,35 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   };
 
   const handleGenerateContent = async (index: number) => {
-    if (!formData.theme || !sections[index].title) {
-      setToast({
-        type: 'error',
-        message: 'テーマとセクションタイトルを入力してください'
-      });
-      return;
-    }
-
     try {
       setGeneratingSections(prev => [...prev, index]);
       const controller = new AbortController();
       setAbortControllers(prev => ({ ...prev, [index]: controller }));
 
-      const previousSections = sections.slice(0, index).map(s => ({
-        title: s.title,
-        content: s.content
-      }));
-
-      const newContent = await generateBlogContent(
-        formData.theme,
-        sections[index].title,
-        previousSections,
-        index === sections.length - 1,
-        controller.signal
-      );
+      let newContent: string;
+      if (formData.mode === 'simple') {
+        // シンプルモード：個別のセクション生成
+        newContent = await generateBlogContent(
+          formData.theme,
+          sections[index].title,
+          [],  // 前のセクションの内容は考慮しない
+          index === sections.length - 1,
+          controller.signal
+        );
+      } else {
+        // コンテキストモード：前のセクションの内容を考慮
+        const previousSections = sections.slice(0, index).map(s => ({
+          title: s.title,
+          content: s.content
+        }));
+        newContent = await generateBlogContent(
+          formData.theme,
+          sections[index].title,
+          previousSections,
+          index === sections.length - 1,
+          controller.signal
+        );
+      }
 
       const newSections = [...sections];
       newSections[index] = {
@@ -373,6 +395,46 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             {post ? '記事を編集' : '新規記事作成'}
           </h1>
           <div className="flex items-center gap-4">
+            <TooltipProvider>
+              <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, mode: 'simple' }))}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                        ${formData.mode === 'simple'
+                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+                        }`}
+                    >
+                      シンプルモード
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>各セクションを独立して生成します。<br />前後の文脈は考慮されません。</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, mode: 'context' }))}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                        ${formData.mode === 'context'
+                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+                        }`}
+                    >
+                      コンテキストモード
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>前のセクションの内容を考慮しながら生成します。<br />文脈の一貫性が保たれます。</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
             <ExportMenu onExport={handleExport} />
             <Button
               type="submit"
