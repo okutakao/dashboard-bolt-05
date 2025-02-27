@@ -2,21 +2,16 @@ import { MockOutline } from './mockData';
 
 // マークダウンへの変換
 export function convertToMarkdown(outline: MockOutline, tone: string): string {
-  const sampleContent = {
-    casual: "カジュアルな文体で書かれた分かりやすい説明文がここに入ります。",
-    business: "ビジネス向けの専門的な内容を、簡潔かつ正確に説明します。",
-    academic: "学術的な観点から、理論的背景と実証研究の結果を詳細に記述します。"
-  };
-
   let markdown = `# ${outline.title}\n\n`;
 
   outline.sections.forEach((section) => {
     markdown += `## ${section.title}\n\n`;
-    markdown += `${section.description}\n\n`;
-    markdown += `${sampleContent[tone as keyof typeof sampleContent]}\n\n`;
-    markdown += "- 重要なポイント1\n";
-    markdown += "- 重要なポイント2\n";
-    markdown += "- 重要なポイント3\n\n";
+    if (section.description) {
+      markdown += `${section.description}\n\n`;
+    }
+    if (section.content) {
+      markdown += `${section.content}\n\n`;
+    }
   });
 
   return markdown;
@@ -24,12 +19,6 @@ export function convertToMarkdown(outline: MockOutline, tone: string): string {
 
 // HTMLへの変換
 export function convertToHTML(outline: MockOutline, tone: string): string {
-  const sampleContent = {
-    casual: "カジュアルな文体で書かれた分かりやすい説明文がここに入ります。",
-    business: "ビジネス向けの専門的な内容を、簡潔かつ正確に説明します。",
-    academic: "学術的な観点から、理論的背景と実証研究の結果を詳細に記述します。"
-  };
-
   let html = `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -59,15 +48,8 @@ export function convertToHTML(outline: MockOutline, tone: string): string {
     html += `
     <section>
         <h2>${section.title}</h2>
-        <p class="description">${section.description}</p>
-        <div class="content">
-            <p>${sampleContent[tone as keyof typeof sampleContent]}</p>
-            <ul>
-                <li>重要なポイント1</li>
-                <li>重要なポイント2</li>
-                <li>重要なポイント3</li>
-            </ul>
-        </div>
+        ${section.description ? `<p class="description">${section.description}</p>` : ''}
+        ${section.content ? `<div class="content">${section.content}</div>` : ''}
     </section>`;
   });
 

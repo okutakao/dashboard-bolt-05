@@ -6,6 +6,7 @@ type MockOutline = {
   sections: Array<{
     title: string;
     description: string;
+    content?: string;
   }>;
 };
 
