@@ -57,6 +57,7 @@ export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
         theme: post.theme,
         tone: post.tone,
         status: post.status,
+        mode: post.mode || 'simple',
         createdAt: new Date(post.created_at).toISOString(),
         updatedAt: new Date(post.updated_at).toISOString(),
         sections: (post.sections || [])
@@ -110,6 +111,7 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
     theme: post.theme,
     tone: post.tone,
     status: post.status,
+    mode: post.mode || 'simple',
     createdAt: post.created_at,
     updatedAt: post.updated_at,
     sections: post.sections
@@ -167,6 +169,7 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
         theme: post.theme,
         tone: post.tone,
         status: post.status,
+        mode: post.mode,
         created_at: post.createdAt,
         updated_at: post.updatedAt
       })
@@ -210,6 +213,7 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
       theme: newPost.theme,
       tone: newPost.tone,
       status: newPost.status,
+      mode: newPost.mode,
       createdAt: newPost.created_at,
       updatedAt: newPost.updated_at,
       sections: sections.map(section => ({
@@ -245,6 +249,7 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
         theme: post.theme,
         tone: post.tone,
         status: post.status,
+        mode: post.mode,
         updated_at: post.updatedAt
       })
       .eq('id', post.id)
@@ -292,6 +297,7 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
       theme: updatedPost.theme,
       tone: updatedPost.tone,
       status: updatedPost.status,
+      mode: updatedPost.mode,
       createdAt: updatedPost.created_at,
       updatedAt: updatedPost.updated_at,
       sections: sections.map(section => ({
@@ -353,6 +359,7 @@ export async function updateBlogPostStatus(id: string, status: BlogPost['status'
       theme: post.theme,
       tone: post.tone,
       status: post.status,
+      mode: post.mode || 'simple',
       createdAt: post.created_at,
       updatedAt: post.updated_at,
       sections: post.sections
