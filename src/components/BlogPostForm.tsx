@@ -4,6 +4,8 @@ import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
 import { downloadMarkdown } from '../lib/markdown';
+import { ExportMenu } from './ExportMenu';
+import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 import { BlogPostPreview } from './BlogPostPreview';
 import { Toast } from './Toast';
 import { Button } from './ui/button';
@@ -350,9 +352,71 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     handleSectionChange(index, 'content', e.target.value);
   };
 
+  const handleExport = (format: ExportFormat) => {
+    try {
+      let content: string;
+      let filename: string;
+      const baseFilename = formData.title.toLowerCase().replace(/\s+/g, '-');
+
+      const outline = {
+        id: post?.id || 'temp-' + Date.now(),
+        title: formData.title,
+        sections: sections.map(s => ({
+          title: s.title,
+          description: '',
+          content: s.content
+        }))
+      };
+
+      switch (format) {
+        case 'markdown':
+          content = convertToMarkdown(outline, formData.tone);
+          filename = `${baseFilename}.md`;
+          break;
+        case 'html':
+          content = convertToHTML(outline, formData.tone);
+          filename = `${baseFilename}.html`;
+          break;
+        default:
+          throw new Error('不正なフォーマットです');
+      }
+
+      downloadFile(content, filename, format);
+      setToast({
+        type: 'success',
+        message: `${format.toUpperCase()}ファイルをダウンロードしました`
+      });
+    } catch (error) {
+      setToast({
+        type: 'error',
+        message: 'ファイルのエクスポートに失敗しました'
+      });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4">
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">
+            {post ? '記事を編集' : '新規記事作成'}
+          </h1>
+          <div className="flex items-center gap-4">
+            <ExportMenu onExport={handleExport} />
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-2"
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              <span>{post ? '更新' : '保存'}</span>
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-col gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -581,15 +645,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
               ダウンロード
             </Button>
           </div>
-
-          <Button
-            type="submit"
-            disabled={isSubmitting || !validateForm()}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {post ? '更新' : '作成'}
-          </Button>
         </div>
       </form>
 
