@@ -244,13 +244,15 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         title: s.title,
         content: sectionContents[outline.sections.indexOf(s)] || ''
       }));
+
       const newContent = await generateBlogContent(
         outline.title,
         section.title,
         previousSections,
         index === outline.sections.length - 1,
-        undefined // signal parameter
+        undefined
       );
+
       setSectionContents(prev => ({
         ...prev,
         [index]: newContent
@@ -259,11 +261,12 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         type: 'success',
         message: 'セクションを再生成しました'
       });
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err as Error;
       console.error('Error regenerating section:', error);
       setToast({
         type: 'error',
-        message: error instanceof Error ? error.message : 'セクションの再生成に失敗しました'
+        message: error.message || 'セクションの再生成に失敗しました'
       });
     }
   };

@@ -140,9 +140,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         onSave?.(newPost);
         setToast({ type: 'success', message: '記事を作成しました' });
       }
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err as Error;
       console.error('Error saving post:', error);
-      setToast({ type: 'error', message: error instanceof Error ? error.message : '保存中にエラーが発生しました' });
+      setToast({ type: 'error', message: error.message || '保存中にエラーが発生しました' });
     } finally {
       setIsSubmitting(false);
     }
@@ -160,9 +161,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       setTitleSuggestions(titles);
       setShowTitleSuggestions(true);
       setToast({ type: 'success', message: 'タイトルの候補を生成しました' });
-    } catch (error) {
+    } catch (err: unknown) {
+      const error = err as Error;
       console.error('Error generating title:', error);
-      setToast({ type: 'error', message: 'タイトル生成中にエラーが発生しました' });
+      setToast({ type: 'error', message: error.message || 'タイトル生成中にエラーが発生しました' });
     } finally {
       setGeneratingTitle(false);
     }
