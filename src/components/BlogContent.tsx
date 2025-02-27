@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Loader2, GripVertical, Edit2, Save, X, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, GripVertical, Edit2, Save, X, RefreshCw, Download } from 'lucide-react';
 import { MockOutline } from '../lib/mockData';
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, convertToPDF, downloadFile, ExportFormat } from '../lib/export';
@@ -276,6 +276,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       let content: string;
       let filename: string;
       const baseFilename = outline.title.toLowerCase().replace(/\s+/g, '-');
+      const tone = getTone(outline.id);
 
       switch (format) {
         case 'markdown':
