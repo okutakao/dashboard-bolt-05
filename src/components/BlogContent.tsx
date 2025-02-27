@@ -3,7 +3,7 @@ import { FileText, Loader2, GripVertical, Edit2, Save, X, RefreshCw } from 'luci
 import { MockOutline } from '../lib/mockData';
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, convertToPDF, downloadFile, ExportFormat } from '../lib/export';
-import { generateSectionContent } from '../lib/openai';
+import { generateBlogContent } from '../lib/openai';
 import {
   DndContext,
   closestCenter,
@@ -240,7 +240,16 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const handleRegenerateSection = async (index: number) => {
     try {
       const section = outline.sections[index];
-      const newContent = await generateSectionContent(outline.title, section.title, tone as any);
+      const previousSections = outline.sections.slice(0, index).map(s => ({
+        title: s.title,
+        content: sectionContents[outline.sections.indexOf(s)] || ''
+      }));
+      const newContent = await generateBlogContent(
+        outline.title,
+        section.title,
+        previousSections,
+        index === outline.sections.length - 1
+      );
       setSectionContents(prev => ({
         ...prev,
         [index]: newContent
@@ -250,9 +259,10 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         message: 'セクションを再生成しました'
       });
     } catch (error) {
+      console.error('Error regenerating section:', error);
       setToast({
         type: 'error',
-        message: 'セクションの再生成に失敗しました'
+        message: error instanceof Error ? error.message : 'セクションの再生成に失敗しました'
       });
     }
   };

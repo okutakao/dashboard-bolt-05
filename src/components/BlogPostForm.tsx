@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent, useRef } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Download, Loader2, X } from 'lucide-react';
 import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
@@ -51,7 +51,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [generatingTitle, setGeneratingTitle] = useState(false);
   const [generatingOutline, setGeneratingOutline] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
@@ -83,7 +82,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           });
         }
       } catch (err) {
-        setError('記事の取得中にエラーが発生しました');
+        setToast({ type: 'error', message: '記事の取得中にエラーが発生しました' });
       }
     };
 
@@ -243,84 +242,50 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       return;
     }
 
-    if (formData.theme.length < 5) {
-      setToast({
-        type: 'error',
-        message: 'テーマは5文字以上で入力してください'
-      });
-      return;
-    }
-
-    if (sections[index].title.length < 5) {
-      setToast({
-        type: 'error',
-        message: 'セクションタイトルは5文字以上で入力してください'
-      });
-      return;
-    }
-
-    if (generatingSections.includes(index)) {
-      setToast({
-        type: 'info',
-        message: `セクション「${sections[index].title}」は現在生成中です`
-      });
-      return;
-    }
-
-    const controller = new AbortController();
-    setAbortControllers(prev => ({ ...prev, [index]: controller }));
-    setGeneratingSections(prev => [...prev, index]);
-    setAbortingStates(prev => ({ ...prev, [index]: false }));
-
     try {
-      const previousSections = sections
-        .slice(0, index)
-        .map(section => ({
-          title: section.title,
-          content: section.content
-        }))
-        .filter(section => section.content.length > 0);
+      setGeneratingSections(prev => [...prev, index]);
+      const controller = new AbortController();
+      setAbortControllers(prev => ({ ...prev, [index]: controller }));
 
-      const isLastSection = index === sections.length - 1;
-
-      setToast({
-        type: 'info',
-        message: `セクション「${sections[index].title}」の生成を開始します`
-      });
+      const previousSections = sections.slice(0, index).map(s => ({
+        title: s.title,
+        content: s.content
+      }));
 
       const content = await generateBlogContent(
         formData.theme,
         sections[index].title,
         previousSections,
-        isLastSection,
+        index === sections.length - 1,
         controller.signal
       );
 
-      if (!content || content.length < 100) {
-        throw new Error('生成された内容が不十分です。もう一度お試しください。');
-      }
-
-      setSections(prev => prev.map((section, i) =>
-        i === index ? { ...section, content } : section
-      ));
+      const newSections = [...sections];
+      newSections[index] = {
+        ...newSections[index],
+        content,
+        updatedAt: new Date().toISOString()
+      };
+      setSections(newSections);
 
       setToast({
         type: 'success',
-        message: `セクション「${sections[index].title}」の生成が完了しました`
+        message: 'セクションの内容を生成しました'
       });
     } catch (error) {
-      console.error('Content generation error:', error);
-      
-      if (error.message === 'リクエストが中止されました') {
-        setToast({
-          type: 'info',
-          message: `セクション「${sections[index].title}」の生成を中止しました`
-        });
-      } else {
-        setToast({
-          type: 'error',
-          message: `エラーが発生しました: ${error.message || '不明なエラー'}`
-        });
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          setToast({
+            type: 'info',
+            message: '生成をキャンセルしました'
+          });
+        } else {
+          console.error('Error generating content:', error);
+          setToast({
+            type: 'error',
+            message: '内容の生成中にエラーが発生しました'
+          });
+        }
       }
     } finally {
       setGeneratingSections(prev => prev.filter(i => i !== index));
@@ -328,11 +293,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         const newControllers = { ...prev };
         delete newControllers[index];
         return newControllers;
-      });
-      setAbortingStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[index];
-        return newStates;
       });
     }
   };

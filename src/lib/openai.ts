@@ -1,34 +1,33 @@
 import { WritingTone } from '../types';
 import { ArticleStructure } from './models';
-import { supabase } from '../supabase';
+import { OpenAIMessage } from './types';
 
 /**
  * OpenAI APIを呼び出す共通関数
  */
-async function callOpenAIFunction(messages: any[], options?: any, signal?: AbortSignal) {
+async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<string, any>, signal?: AbortSignal): Promise<string> {
   let retryCount = 0;
   const maxRetries = 3;
   const baseDelay = 1000;
 
   while (retryCount <= maxRetries) {
     try {
-      // 中止シグナルのチェック
       if (signal?.aborted) {
-        console.log('🛑 OpenAI API リクエストが中止されました');
-        throw new Error('リクエストが中止されました');
+        throw new Error('AbortError');
       }
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: 'gpt-4-mini',
           messages,
           ...options,
         }),
-        signal, // AbortSignalを渡す
+        signal,
       });
 
       if (!response.ok) {
@@ -38,24 +37,26 @@ async function callOpenAIFunction(messages: any[], options?: any, signal?: Abort
       }
 
       const data = await response.json();
-      console.log('✅ OpenAI APIレスポンス:', data);
       return data.choices[0].message.content;
 
-    } catch (error: any) {
-      if (error.name === 'AbortError' || signal?.aborted) {
-        console.log('🛑 リクエストが中止されました - 処理を終了します');
-        throw new Error('リクエストが中止されました');
-      }
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || signal?.aborted) {
+          throw new Error('AbortError');
+        }
 
-      if (retryCount === maxRetries) {
-        console.error(`❌ 最大リトライ回数(${maxRetries})に到達しました`);
-        throw error;
-      }
+        if (retryCount === maxRetries) {
+          console.error(`❌ 最大リトライ回数(${maxRetries})に到達しました`);
+          throw error;
+        }
 
-      const delay = baseDelay * Math.pow(2, retryCount);
-      console.log(`⏳ ${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      retryCount++;
+        const delay = baseDelay * Math.pow(2, retryCount);
+        console.log(`⏳ ${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        retryCount++;
+      } else {
+        throw new Error('予期せぬエラーが発生しました');
+      }
     }
   }
 
@@ -87,9 +88,9 @@ export async function sendChatMessageWithSystem(
  */
 export async function generateBlogOutline(theme: string, tone: WritingTone) {
   try {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
-        role: "system",
+        role: "system" as const,
         content: `あなたはブログ記事のアウトライン生成を支援するアシスタントです。
 以下の条件に従ってアウトラインを生成してください：
 - 文体は${tone}を使用
@@ -108,7 +109,7 @@ export async function generateBlogOutline(theme: string, tone: WritingTone) {
 }`
       },
       {
-        role: "user",
+        role: "user" as const,
         content: `テーマ: ${theme}
 上記のテーマについて、ブログ記事のアウトラインを生成してください。
 最後のセクションは必ず記事全体のまとめや結論となるようにしてください。`
@@ -207,10 +208,10 @@ ${isLastSection ? 'このセクションは記事全体のまとめとして、�
   isFirstSection ? 'このセクションは記事の最初のセクションとして、テーマの背景と重要性を説明してください。' :
   '前のセクションの内容を踏まえつつ、このセクションの内容を展開してください。'}`;
 
-    const messages = [
-      { role: "system", content: systemPrompt },
+    const messages: OpenAIMessage[] = [
+      { role: "system" as const, content: systemPrompt },
       {
-        role: "user",
+        role: "user" as const,
         content: `テーマ: ${theme}
 セクションタイトル: ${sectionTitle}
 ${!isFirstSection && previousContentsContext ? '\n前のセクションの内容:\n' + previousContentsContext : ''}`
@@ -244,8 +245,8 @@ ${content}`;
 
       if (retryCount < maxRetries - 1) {
         processedContent = await callOpenAIFunction([
-          { role: "system", content: "文章の長さを調整しつつ、内容の一貫性と完結性を保ってください。" },
-          { role: "user", content: adjustmentPrompt }
+          { role: "system" as const, content: "文章の長さを調整しつつ、内容の一貫性と完結性を保ってください。" },
+          { role: "user" as const, content: adjustmentPrompt }
         ], signal);
         needsAdjustment = true;
       }
@@ -270,8 +271,8 @@ ${content}`;
 ${processedContent}`;
 
       processedContent = await callOpenAIFunction([
-        { role: "system", content: "文章の完結性を保ちながら、段落の終わり方を適切に修正してください。" },
-        { role: "user", content: adjustmentPrompt }
+        { role: "system" as const, content: "文章の完結性を保ちながら、段落の終わり方を適切に修正してください。" },
+        { role: "user" as const, content: adjustmentPrompt }
       ], signal);
       needsAdjustment = true;
     }
@@ -286,8 +287,8 @@ ${processedContent}`;
 ${processedContent}`;
 
       processedContent = await callOpenAIFunction([
-        { role: "system", content: "最終確認と微調整を行います。" },
-        { role: "user", content: finalCheckPrompt }
+        { role: "system" as const, content: "最終確認と微調整を行います。" },
+        { role: "user" as const, content: finalCheckPrompt }
       ], signal);
     }
 
@@ -330,9 +331,9 @@ export async function generateArticleContent(
   try {
     // 導入部の生成
     console.log('導入部の生成を開始...');
-    const introMessages = [
+    const introMessages: OpenAIMessage[] = [
       {
-        role: "system",
+        role: "system" as const,
         content: `あなたはブログ記事の導入部を生成するアシスタントです。
 以下の条件に従って導入部を生成してください：
 - 文体は${tone}を使用
@@ -344,7 +345,7 @@ export async function generateArticleContent(
 - 途中で文章が切れないようにする`
       },
       {
-        role: "user",
+        role: "user" as const,
         content: `タイトル: ${title}
 テーマ: ${theme}
 導入部のタイトル: ${structure.introduction.title}
@@ -364,9 +365,9 @@ export async function generateArticleContent(
       const section = structure.mainSections[i];
       console.log(`メインセクション ${i + 1}/${structure.mainSections.length}「${section.title}」の生成を開始...`);
 
-      const mainSectionMessages = [
+      const mainSectionMessages: OpenAIMessage[] = [
         {
-          role: "system",
+          role: "system" as const,
           content: `あなたはブログ記事のメインセクションを生成するアシスタントです。
 以下の条件に従って内容を生成してください：
 - 文体は${tone}を使用
@@ -379,7 +380,7 @@ export async function generateArticleContent(
 - 途中で文章が切れないようにする`
         },
         {
-          role: "user",
+          role: "user" as const,
           content: `タイトル: ${title}
 テーマ: ${theme}
 セクションタイトル: ${section.title}
@@ -411,9 +412,9 @@ ${previousContext}
     ].join('\n\n');
 
     structure.conclusion.fullContext = fullContext;
-    const conclusionMessages = [
+    const conclusionMessages: OpenAIMessage[] = [
       {
-        role: "system",
+        role: "system" as const,
         content: `あなたはブログ記事のまとめセクションを生成するアシスタントです。
 これは記事全体の最後のセクションとして、以下の条件に従って生成してください：
 - 文体は${tone}を使用
@@ -426,7 +427,7 @@ ${previousContext}
 - 途中で文章が切れないようにする`
       },
       {
-        role: "user",
+        role: "user" as const,
         content: `タイトル: ${title}
 テーマ: ${theme}
 まとめのタイトル: ${structure.conclusion.title}
@@ -519,13 +520,13 @@ export function validateOutlineResponse(response: string): GeneratedOutline {
  */
 export async function generateTitle(theme: string, content?: string): Promise<string[]> {
   try {
-    const messages = [
+    const messages: OpenAIMessage[] = [
       {
-        role: "system",
+        role: "system" as const,
         content: "あなたはブログ記事のタイトルを生成する専門家です。SEOを意識した魅力的なタイトルを3つ提案してください。"
       },
       {
-        role: "user",
+        role: "user" as const,
         content: `以下の条件でブログ記事のタイトルを3つ提案してください：
         
 テーマ: ${theme}
