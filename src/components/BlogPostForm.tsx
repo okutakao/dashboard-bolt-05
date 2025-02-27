@@ -268,15 +268,14 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       };
       setSections(newSections);
       setToast({ type: 'success', message: 'セクションの内容を生成しました' });
-    } catch (error) {
-      if (error instanceof Error) {
-        setToast({
-          type: 'error',
-          message: error.message === 'AbortError'
-            ? '生成をキャンセルしました'
-            : '内容の生成中にエラーが発生しました'
-        });
-      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setToast({
+        type: 'error',
+        message: error.message === 'AbortError'
+          ? '生成をキャンセルしました'
+          : '内容の生成中にエラーが発生しました'
+      });
     } finally {
       setGeneratingSections(prev => prev.filter(i => i !== index));
       setAbortControllers(prev => {

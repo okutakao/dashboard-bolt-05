@@ -248,7 +248,8 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         outline.title,
         section.title,
         previousSections,
-        index === outline.sections.length - 1
+        index === outline.sections.length - 1,
+        undefined // signal parameter
       );
       setSectionContents(prev => ({
         ...prev,
