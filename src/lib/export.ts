@@ -78,12 +78,6 @@ export function convertToHTML(outline: MockOutline, tone: string): string {
   return html;
 }
 
-// PDFへの変換（HTML経由）
-export function convertToPDF(outline: MockOutline, tone: string): string {
-  // PDFはHTMLを経由して生成するため、同じHTMLを返す
-  return convertToHTML(outline, tone);
-}
-
 export type ExportFormat = 'markdown' | 'html';
 
 // ファイルのダウンロード
