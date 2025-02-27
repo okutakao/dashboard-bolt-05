@@ -1,6 +1,6 @@
 import { BlogPost, AIGeneration } from './models';
 
-const mockBlogPosts: BlogPost[] = [
+export const mockBlogPosts: BlogPost[] = [
   {
     id: '1',
     userId: 'user1',
@@ -8,8 +8,9 @@ const mockBlogPosts: BlogPost[] = [
     theme: 'React入門',
     tone: 'casual',
     status: 'published',
-    createdAt: '2024-02-19T10:00:00Z',
-    updatedAt: '2024-02-19T10:00:00Z',
+    mode: 'simple',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
     sections: [
       {
         id: 'section1',
@@ -38,6 +39,7 @@ const mockBlogPosts: BlogPost[] = [
     theme: 'データ分析',
     tone: 'business',
     status: 'draft',
+    mode: 'simple',
     createdAt: '2024-02-02T00:00:00Z',
     updatedAt: '2024-02-02T00:00:00Z',
     sections: [

@@ -18,19 +18,11 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 
-interface Section {
-  title: string;
-  content: string;
-  updatedAt: string;
-  recommendedLength?: { min: number; max: number };
-}
-
 interface BlogPostFormProps {
   postId?: string;
   onSave: (post: BlogPost) => Promise<void>;
   user: {
     id: string;
-    name: string;
   };
 }
 
