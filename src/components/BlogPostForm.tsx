@@ -1,5 +1,5 @@
 import { useState, useEffect, ChangeEvent } from 'react';
-import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X } from 'lucide-react';
+import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X, Layers, GitBranch } from 'lucide-react';
 import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
@@ -30,6 +30,7 @@ interface Section {
   title: string;
   content: string;
   updatedAt: string;
+  recommendedLength?: { min: number; max: number };
 }
 
 interface BlogPostFormProps {
@@ -91,6 +92,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             sortOrder: s.sortOrder,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
+            recommendedLength: s.recommendedLength
           })));
           setFormData({
             title: fetchedPost.title,
@@ -140,6 +142,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           theme: formData.theme,
           tone: formData.tone,
           status: formData.status,
+          mode: formData.mode,
           createdAt: post.createdAt,
           updatedAt: now,
           sections: updatedSections
@@ -152,6 +155,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           theme: formData.theme,
           tone: formData.tone,
           status: formData.status,
+          mode: formData.mode,
           createdAt: now,
           updatedAt: now,
           sections: updatedSections
@@ -205,13 +209,26 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       const outline = await generateBlogOutline(formData.theme, formData.tone);
       const newSections = outline.sections.map((section, index) => ({
         title: section.title,
-        content: section.content,
+        content: section.content || '',
         sortOrder: index,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        recommendedLength: section.recommendedLength || {
+          min: index === outline.sections.length - 1 ? 400 : 800,
+          max: index === outline.sections.length - 1 ? 600 : 1200
+        }
       }));
       setSections(newSections);
-      setToast({ type: 'success', message: '記事構成を生成しました' });
+
+      // 推定読了時間と合計文字数の情報を表示
+      if (outline.estimatedTotalLength && outline.estimatedReadingTime) {
+        setToast({
+          type: 'success',
+          message: `記事構成を生成しました（推定総文字数: ${outline.estimatedTotalLength.min}〜${outline.estimatedTotalLength.max}文字、読了時間: 約${outline.estimatedReadingTime}分）`
+        });
+      } else {
+        setToast({ type: 'success', message: '記事構成を生成しました' });
+      }
     } catch (error) {
       console.error('Error generating outline:', error);
       setToast({ type: 'error', message: '記事構成の生成中にエラーが発生しました' });
@@ -297,10 +314,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     } catch (err: unknown) {
       const error = err as Error;
       setToast({
-        type: 'error',
+        type: error.message === 'AbortError' ? 'info' : 'error',
         message: error.message === 'AbortError'
-          ? '生成をキャンセルしました'
-          : '内容の生成中にエラーが発生しました'
+          ? '生成を中止しました'
+          : '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
       });
     } finally {
       setGeneratingSections(prev => prev.filter(i => i !== index));
@@ -395,46 +412,53 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             {post ? '記事を編集' : '新規記事作成'}
           </h1>
           <div className="flex items-center gap-4">
-            <TooltipProvider>
-              <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, mode: 'simple' }))}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors
-                        ${formData.mode === 'simple'
-                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-2 border border-gray-200 dark:border-gray-700">
+              <TooltipProvider>
+                <div className="relative inline-flex items-center">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, mode: formData.mode === 'simple' ? 'context' : 'simple' }))}
+                        className={`relative inline-flex h-8 w-20 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 border-2 ${
+                          formData.mode === 'context' 
+                            ? 'bg-blue-600 border-blue-700' 
+                            : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'
                         }`}
-                    >
-                      シンプルモード
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>各セクションを独立して生成します。<br />前後の文脈は考慮されません。</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, mode: 'context' }))}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors
-                        ${formData.mode === 'context'
-                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'
-                        }`}
-                    >
-                      コンテキストモード
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>前のセクションの内容を考慮しながら生成します。<br />文脈の一貫性が保たれます。</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
+                        role="switch"
+                        aria-checked={formData.mode === 'context'}
+                      >
+                        <span
+                          className={`${
+                            formData.mode === 'context' ? 'translate-x-12' : 'translate-x-1'
+                          } inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform border border-gray-300`}
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p className="text-sm">
+                        {formData.mode === 'simple' 
+                          ? '各セクションを独立して生成します。前後の文脈は考慮されません。'
+                          : '前のセクションの内容を考慮しながら生成します。文脈の一貫性が保たれます。'}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {formData.mode === 'simple' ? (
+                      <div className="flex items-center gap-1 w-28">
+                        <Layers className="h-4 w-4 shrink-0" />
+                        <span className="truncate">シンプル</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 w-28">
+                        <GitBranch className="h-4 w-4 shrink-0" />
+                        <span className="truncate">コンテキスト</span>
+                      </div>
+                    )}
+                  </span>
+                </div>
+              </TooltipProvider>
+            </div>
             <ExportMenu onExport={handleExport} />
             <Button
               type="submit"
@@ -569,6 +593,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
                   onChange={(e) => handleSectionTitleChange(index, e)}
                   className="flex-1"
                 />
+                {section.recommendedLength && (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    推奨: {section.recommendedLength.min}〜{section.recommendedLength.max}文字
+                  </div>
+                )}
                 {generatingSections.includes(index) ? (
                   <Button
                     type="button"
@@ -612,30 +641,47 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
                 rows={6}
               />
 
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  onClick={() => handleMoveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-2"
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleMoveSection(index, 'down')}
-                  disabled={index === sections.length - 1}
-                  className="p-2"
-                >
-                  <ArrowDown className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => handleDeleteSection(index)}
-                  className="p-2 text-red-500 hover:text-red-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex gap-2">
+                  {section.content && (
+                    <span>現在の文字数: {section.content.length}文字</span>
+                  )}
+                  {section.recommendedLength && (
+                    <span className={`${
+                      section.content && (
+                        section.content.length < section.recommendedLength.min ||
+                        section.content.length > section.recommendedLength.max
+                      ) ? 'text-yellow-500 dark:text-yellow-400' : ''
+                    }`}>
+                      目標: {section.recommendedLength.min}〜{section.recommendedLength.max}文字
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => handleMoveSection(index, 'up')}
+                    disabled={index === 0}
+                    className="p-2"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleMoveSection(index, 'down')}
+                    disabled={index === sections.length - 1}
+                    className="p-2"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleDeleteSection(index)}
+                    className="p-2 text-red-500 hover:text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

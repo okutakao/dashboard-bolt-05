@@ -16,69 +16,76 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
       }
 
       console.log(`🔄 APIリクエストを実行中... (試行: ${retryCount + 1}/${maxRetries + 1})`);
+      console.log('リクエストの内容:', { messages, options });
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/openai`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages,
-          temperature: 0.7,
-          max_tokens: 1000,
-          response_format: { type: "text" },
-          top_p: 0.9,
-          presence_penalty: 0.3,
-          frequency_penalty: 0.3,
-          ...options,
-        }),
+        body: JSON.stringify({ messages }),
         signal,
       });
 
+      const data = await response.json();
+      console.log('APIレスポンス:', data);
+
       if (!response.ok) {
-        const error = await response.json();
-        console.error('❌ OpenAI APIエラー:', error);
-        
-        if (error.error?.code === 'rate_limit_exceeded' && retryCount < maxRetries) {
+        console.error('APIエラーレスポンス:', data);
+        if (data.details) {
+          console.error('エラー詳細:', data.details);
+        }
+
+        // レート制限エラーの場合
+        if (data.details?.code === 'rate_limit_exceeded' && retryCount < maxRetries) {
           const delay = baseDelay * Math.pow(2, retryCount);
           console.log(`⏳ レート制限により待機中... ${delay}ms後にリトライします`);
           await new Promise(resolve => setTimeout(resolve, delay));
           retryCount++;
           continue;
         }
-        
-        throw new Error(error.error?.message || 'OpenAI APIリクエストが失敗しました');
+
+        throw new Error(data.error || 'APIリクエストが失敗しました');
       }
 
-      const data = await response.json();
+      if (!data.content) {
+        throw new Error('APIレスポンスの形式が不正です');
+      }
+
       console.log('✅ APIリクエスト成功');
-      return data.choices[0].message.content;
+      return data.content;
 
     } catch (error) {
+      console.error('APIリクエストエラー:', error);
+      
       if (error instanceof Error) {
+        console.error('エラー詳細:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+
         if (error.name === 'AbortError' || signal?.aborted) {
           console.log('❌ リクエストが中断されました');
           throw new Error('リクエストが中断されました');
         }
+      }
 
-        if (retryCount === maxRetries) {
-          console.error(`❌ 最大リトライ回数(${maxRetries})に到達しました`);
-          throw error;
-        }
-
+      if (retryCount < maxRetries) {
         const delay = baseDelay * Math.pow(2, retryCount);
         console.log(`⏳ エラーが発生しました。${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         retryCount++;
-      } else {
-        throw new Error('予期せぬエラーが発生しました');
+        continue;
       }
+
+      throw error;
     }
   }
 
-  throw new Error('予期せぬエラーが発生しました');
+  throw new Error('最大リトライ回数を超過しました');
 }
 
 /**
@@ -105,35 +112,41 @@ export async function sendChatMessageWithSystem(
  * ブログのアウトラインを生成する
  */
 export async function generateBlogOutline(theme: string, tone: WritingTone) {
-  try {
-    const messages: OpenAIMessage[] = [
-      {
-        role: "system" as const,
-        content: `あなたはブログ記事のアウトライン生成を支援するアシスタントです。
-以下の条件に従ってアウトラインを生成してください：
-- 文体は${tone}を使用
-- 2-5個のセクションを提案（最後のセクションは必ず「まとめ」または結論を示すセクション）
-- 各セクションにはタイトルと簡単な説明を含める
-- 最後のセクションは記事全体の結論やまとめとなるように設計
-- JSONフォーマットで返答（以下の形式）：
+  const messages: OpenAIMessage[] = [
+    {
+      role: "system" as const,
+      content: "あなたはブログ記事の構成を提案するアシスタントです。以下の条件に従って、日本語で記事の構成を提案してください：\n- セクションタイトルは日本語で\n- 最後のセクションは必ずまとめや結論\n- 各セクションには推奨文字数を含める\n- セクション数は3〜5個程度"
+    },
+    {
+      role: "user" as const,
+      content: `テーマ: ${theme}
+文体: ${tone}
+
+以下の形式で記事の構成を提案してください：
 {
   "sections": [
     {
-      "title": "セクションタイトル",
-      "content": "セクションの説明",
+      "title": "セクションタイトル（日本語で）",
+      "description": "セクションの説明（100文字以内）",
+      "recommendedLength": {
+        "min": 最小文字数,
+        "max": 最大文字数
+      },
       "type": "main" | "conclusion"  // 最後のセクションは必ず"conclusion"
     }
-  ]
+  ],
+  "estimatedTotalLength": {
+    "min": 合計最小文字数,
+    "max": 合計最大文字数
+  },
+  "estimatedReadingTime": "推定読了時間（分）",
+  "targetAudience": "想定読者",
+  "keywords": ["キーワード1", "キーワード2"]
 }`
-      },
-      {
-        role: "user" as const,
-        content: `テーマ: ${theme}
-上記のテーマについて、ブログ記事のアウトラインを生成してください。
-最後のセクションは必ず記事全体のまとめや結論となるようにしてください。`
-      }
-    ];
+    }
+  ];
 
+  try {
     const response = await callOpenAIFunction(messages);
     return validateOutlineResponse(response);
   } catch (error) {
@@ -178,6 +191,15 @@ export async function generateBlogContent(
       // 生成された内容の後処理
       const processedContent = await postProcessContent(response, retryCount, signal);
       
+      // 文字数チェック - エラーメッセージを表示せずに再試行
+      if (processedContent.length < minLength || processedContent.length > maxLength) {
+        if (retryCount < maxRetries - 1) {
+          return generateWithRetry(retryCount + 1);
+        }
+        // 最大試行回数を超えた場合は、現在の内容をそのまま返す
+        return processedContent;
+      }
+
       return processedContent;
 
     } catch (error) {
@@ -187,7 +209,6 @@ export async function generateBlogContent(
         }
         // APIレート制限エラーの場合
         if (error.message.includes('rate_limit') && retryCount < maxRetries) {
-          console.log(`APIレート制限により失敗。${retryDelay}ms後にリトライします... (${retryCount + 1}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, retryDelay * (retryCount + 1)));
           return generateWithRetry(retryCount + 1);
         }
@@ -509,7 +530,18 @@ export interface GeneratedOutline {
     title: string;
     content: string;
     type: 'main' | 'conclusion';
+    recommendedLength?: {
+      min: number;
+      max: number;
+    };
   }[];
+  estimatedTotalLength?: {
+    min: number;
+    max: number;
+  };
+  estimatedReadingTime?: number;
+  targetAudience?: string;
+  keywords?: string[];
 }
 
 // レスポンスのバリデーション
@@ -537,43 +569,88 @@ export function validateOutlineResponse(response: string): GeneratedOutline {
  * タイトルを生成する
  */
 export async function generateTitle(theme: string, content?: string): Promise<string[]> {
-  try {
-    const messages: OpenAIMessage[] = [
-      {
-        role: "system" as const,
-        content: "あなたはブログ記事のタイトルを生成する専門家です。SEOを意識した魅力的なタイトルを3つ提案してください。"
-      },
-      {
-        role: "user" as const,
-        content: `以下の条件でブログ記事のタイトルを3つ提案してください：
-        
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  const generateWithRetry = async (attempt: number): Promise<string[]> => {
+    try {
+      const messages: OpenAIMessage[] = [
+        {
+          role: "system",
+          content: "あなたはブログ記事のタイトルを生成する専門家です。SEOを意識した魅力的なタイトルを3つ提案してください。"
+        },
+        {
+          role: "user",
+          content: `以下の条件でブログ記事のタイトルを3つ提案してください：
+          
 テーマ: ${theme}
-${content ? `内容の一部: ${content}\n` : ''}
+${content ? `内容: ${content}` : ''}
+
 条件：
-- 読者の興味を引く魅力的なタイトル
-- SEOを意識した検索されやすいタイトル
 - 30文字以内
-- 記事の価値が伝わるタイトル
-- 日本語で提案
+- SEOを意識した魅力的な表現
+- 日本語で作成
+- 具体的で分かりやすい表現
+- 必ず3つのタイトルを提案
+- 各タイトルは改行で区切る`
+        }
+      ];
 
-形式：
-1. [タイトル1]
-2. [タイトル2]
-3. [タイトル3]`
+      console.log('タイトル生成リクエストを送信:', { theme, content });
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/openai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ messages })
+      });
+
+      const data = await response.json();
+      console.log('タイトル生成レスポンス:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'APIリクエストが失敗しました');
       }
-    ];
 
-    const response = await callOpenAIFunction(messages);
-    
-    // レスポンスからタイトルを抽出
-    const titles = response
-      .split('\n')
-      .filter((line: string) => line.trim().startsWith('1.') || line.trim().startsWith('2.') || line.trim().startsWith('3.'))
-      .map((line: string) => line.replace(/^\d+\.\s*\[?|\]?$/g, '').trim());
+      const titles = data.content.split('\n').filter((title: string) => 
+        title.trim() && title.length <= 30
+      );
 
-    return titles;
-  } catch (error) {
-    console.error('OpenAI API error:', error);
-    throw new Error('タイトル生成に失敗しました');
-  }
+      console.log('生成されたタイトル:', titles);
+
+      if (titles.length === 0) {
+        throw new Error('有効なタイトルが生成されませんでした');
+      }
+
+      if (titles.length < 3) {
+        throw new Error(`十分な数のタイトルが生成されませんでした（生成数: ${titles.length}）`);
+      }
+
+      return titles.slice(0, 3);
+    } catch (error: unknown) {
+      console.error('タイトル生成エラー:', error);
+      
+      if (error instanceof Error) {
+        console.error('エラー詳細:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.log(`エラーが発生しました。${delay}ms後に再試行します...（試行回数: ${attempt}/${maxRetries}）`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return generateWithRetry(attempt + 1);
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
+      throw new Error(`タイトル生成に失敗しました: ${errorMessage}`);
+    }
+  };
+
+  return generateWithRetry(1);
 }

@@ -25,6 +25,7 @@ export function App() {
     if (!user) {
       setCurrentView('list');
       setSelectedPostId(null);
+      setToast(null);
     }
   }, [user]);
 
@@ -32,6 +33,9 @@ export function App() {
     try {
       await supabase.auth.signOut();
       setToast({ type: 'success', message: 'ログアウトしました' });
+      setTimeout(() => {
+        setToast(null);
+      }, 1000);
     } catch (error) {
       setToast({ type: 'error', message: 'ログアウトに失敗しました' });
     }

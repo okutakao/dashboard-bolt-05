@@ -23,9 +23,18 @@ export interface BlogSection {
   updatedAt: string;
 }
 
-export interface FormSection extends Omit<BlogSection, 'id' | 'postId'> {
+export interface FormSection {
   id?: string;
   postId?: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  recommendedLength?: {
+    min: number;
+    max: number;
+  };
 }
 
 export interface AIGeneration {
