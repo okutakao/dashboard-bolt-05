@@ -308,57 +308,13 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     }
   };
 
-  const handleDownload = () => {
-    if (!validateForm()) {
-      setToast({ type: 'error', message: '必須項目を入力してください' });
-      return;
-    }
-    const postData: BlogPost = {
-      id: post?.id || 'draft',
-      userId: user.id,
-      title: formData.title,
-      theme: formData.theme,
-      tone: formData.tone,
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      sections: sections.map((section, index) => ({
-        id: section.id || `draft-${index}`,
-        postId: post?.id || 'draft',
-        title: section.title,
-        content: section.content,
-        sortOrder: section.sortOrder,
-        createdAt: section.createdAt,
-        updatedAt: section.updatedAt
-      }))
-    };
-    downloadMarkdown(postData);
-    setToast({ type: 'success', message: '記事をダウンロードしました' });
-  };
-
-  const handleTitleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, title: e.target.value });
-  };
-
-  const handleThemeChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, theme: e.target.value });
-  };
-
-  const handleSectionTitleChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
-    handleSectionChange(index, 'title', e.target.value);
-  };
-
-  const handleSectionContentChange = (index: number, e: ChangeEvent<HTMLTextAreaElement>) => {
-    handleSectionChange(index, 'content', e.target.value);
-  };
-
   const handleExport = (format: ExportFormat) => {
     try {
       let content: string;
       let filename: string;
       const baseFilename = formData.title.toLowerCase().replace(/\s+/g, '-');
 
-      const outline = {
+      const mockOutline = {
         id: post?.id || 'temp-' + Date.now(),
         title: formData.title,
         sections: sections.map(s => ({
@@ -370,11 +326,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
 
       switch (format) {
         case 'markdown':
-          content = convertToMarkdown(outline, formData.tone);
+          content = convertToMarkdown(mockOutline, formData.tone);
           filename = `${baseFilename}.md`;
           break;
         case 'html':
-          content = convertToHTML(outline, formData.tone);
+          content = convertToHTML(mockOutline, formData.tone);
           filename = `${baseFilename}.html`;
           break;
         default:
@@ -392,6 +348,22 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         message: 'ファイルのエクスポートに失敗しました'
       });
     }
+  };
+
+  const handleTitleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, title: e.target.value });
+  };
+
+  const handleThemeChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, theme: e.target.value });
+  };
+
+  const handleSectionTitleChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
+    handleSectionChange(index, 'title', e.target.value);
+  };
+
+  const handleSectionContentChange = (index: number, e: ChangeEvent<HTMLTextAreaElement>) => {
+    handleSectionChange(index, 'content', e.target.value);
   };
 
   return (
@@ -635,14 +607,6 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
                   プレビュー
                 </>
               )}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleDownload}
-              className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              ダウンロード
             </Button>
           </div>
         </div>
