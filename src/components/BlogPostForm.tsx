@@ -81,7 +81,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             status: fetchedPost.status
           });
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        const error = err as Error;
         setToast({ type: 'error', message: '記事の取得中にエラーが発生しました' });
       }
     };
