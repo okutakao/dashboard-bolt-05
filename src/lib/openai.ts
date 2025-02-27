@@ -22,7 +22,7 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4-mini',
+          model: 'gpt-4o-mini',
           messages,
           ...options,
         }),
