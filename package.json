@@ -36,11 +36,13 @@
     "express": "^4.21.2",
     "lodash": "^4.17.21",
     "lucide-react": "^0.344.0",
+    "mdast-util-to-markdown": "^2.1.2",
     "node-fetch": "^3.3.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.3",
-    "remark-gfm": "^4.0.0"
+    "remark-gfm": "^4.0.0",
+    "zwitch": "^2.0.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
