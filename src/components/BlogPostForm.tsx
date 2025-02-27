@@ -1,6 +1,6 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X, Layers, GitBranch } from 'lucide-react';
-import { BlogPost, FormSection } from '../lib/models';
+import { BlogPost, FormSection, FormData } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
 import { ExportMenu } from './ExportMenu';
@@ -18,14 +18,6 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 
-interface FormData {
-  title: string;
-  theme: string;
-  tone: 'casual' | 'business' | 'academic';
-  status: 'draft' | 'published';
-  mode: 'simple' | 'context';
-}
-
 interface Section {
   title: string;
   content: string;
@@ -35,7 +27,7 @@ interface Section {
 
 interface BlogPostFormProps {
   postId?: string;
-  onSave: (data: FormData) => Promise<void>;
+  onSave: (post: BlogPost) => Promise<void>;
   user: {
     id: string;
     name: string;
@@ -63,7 +55,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     theme: '',
     tone: 'casual',
     status: 'draft',
-    mode: 'simple'
+    mode: 'simple',
+    sections: [defaultSection]
   });
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,7 +92,17 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             theme: fetchedPost.theme,
             tone: fetchedPost.tone,
             status: fetchedPost.status,
-            mode: 'simple'
+            mode: 'simple',
+            sections: fetchedPost.sections.map(s => ({
+              id: s.id,
+              postId: s.postId,
+              title: s.title,
+              content: s.content,
+              sortOrder: s.sortOrder,
+              createdAt: s.createdAt,
+              updatedAt: s.updatedAt,
+              recommendedLength: s.recommendedLength
+            }))
           });
         }
       } catch (err: unknown) {
@@ -147,7 +150,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           updatedAt: now,
           sections: updatedSections
         });
-        onSave?.(updatedPost);
+        onSave(updatedPost);
         setToast({ type: 'success', message: '記事を更新しました' });
       } else {
         const newPost = await createBlogPost({
@@ -160,7 +163,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           updatedAt: now,
           sections: updatedSections
         }, user.id);
-        onSave?.(newPost);
+        onSave(newPost);
         setToast({ type: 'success', message: '記事を作成しました' });
       }
     } catch (err: unknown) {

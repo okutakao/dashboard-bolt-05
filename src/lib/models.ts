@@ -47,7 +47,7 @@ export interface FormData {
   tone: 'casual' | 'business' | 'academic';
   status: 'draft' | 'published';
   mode: 'simple' | 'context';
-  sections: FormSection[];
+  sections?: FormSection[];
 }
 
 export interface AIGeneration {
