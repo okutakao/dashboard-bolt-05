@@ -35,7 +35,7 @@ interface Section {
 
 interface BlogPostFormProps {
   postId?: string;
-  onSave: (data: FormData & { sections: Section[] }) => Promise<void>;
+  onSave: (data: FormData) => Promise<void>;
   user: {
     id: string;
     name: string;

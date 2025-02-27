@@ -21,6 +21,10 @@ export interface BlogSection {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  recommendedLength?: {
+    min: number;
+    max: number;
+  };
 }
 
 export interface FormSection {
@@ -35,6 +39,15 @@ export interface FormSection {
     min: number;
     max: number;
   };
+}
+
+export interface FormData {
+  title: string;
+  theme: string;
+  tone: 'casual' | 'business' | 'academic';
+  status: 'draft' | 'published';
+  mode: 'simple' | 'context';
+  sections: FormSection[];
 }
 
 export interface AIGeneration {
