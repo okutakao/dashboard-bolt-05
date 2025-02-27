@@ -84,14 +84,13 @@ export function convertToPDF(outline: MockOutline, tone: string): string {
   return convertToHTML(outline, tone);
 }
 
-export type ExportFormat = 'markdown' | 'pdf' | 'html';
+export type ExportFormat = 'markdown' | 'html';
 
 // ファイルのダウンロード
 export function downloadFile(content: string, filename: string, format: ExportFormat) {
   const mimeTypes = {
     markdown: 'text/markdown;charset=utf-8',
-    html: 'text/html;charset=utf-8',
-    pdf: 'application/pdf'
+    html: 'text/html;charset=utf-8'
   };
 
   const blob = new Blob([content], { type: mimeTypes[format] });

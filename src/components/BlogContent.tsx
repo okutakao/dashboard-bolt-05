@@ -287,10 +287,6 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
           content = convertToHTML(outline, tone);
           filename = `${baseFilename}.html`;
           break;
-        case 'pdf':
-          content = convertToPDF(outline, tone);
-          filename = `${baseFilename}.pdf`;
-          break;
         default:
           throw new Error('不正なフォーマットです');
       }

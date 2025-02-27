@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, ChevronDown, FileText, FileCode, File as FilePdf } from 'lucide-react';
+import { Download, ChevronDown, FileText, FileCode } from 'lucide-react';
 import { ExportFormat } from '../lib/export';
 
 type ExportMenuProps = {
@@ -41,13 +41,6 @@ export function ExportMenu({ onExport }: ExportMenuProps) {
             >
               <FileCode className="h-4 w-4" />
               <span>HTML</span>
-            </button>
-            <button
-              onClick={() => handleExport('pdf')}
-              className="flex items-center gap-2 w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <FilePdf className="h-4 w-4" />
-              <span>PDF</span>
             </button>
           </div>
         </div>
