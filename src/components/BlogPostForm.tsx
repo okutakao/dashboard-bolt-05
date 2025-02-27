@@ -1,9 +1,8 @@
 import { useState, useEffect, ChangeEvent } from 'react';
-import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Download, Loader2, X } from 'lucide-react';
+import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X } from 'lucide-react';
 import { BlogPost, FormSection } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
-import { downloadMarkdown } from '../lib/markdown';
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 import { BlogPostPreview } from './BlogPostPreview';
