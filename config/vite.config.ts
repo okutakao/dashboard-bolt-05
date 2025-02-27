@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    exclude: ['lucide-react']
+    exclude: ['lucide-react'],
+    include: ['zwitch', 'mdast-util-to-markdown']
   },
   server: {
     host: true,
@@ -22,6 +23,7 @@ export default defineConfig({
           vendor: ['react', 'react-dom'],
         },
       },
+      external: ['zwitch'],
     },
   },
   base: './'
