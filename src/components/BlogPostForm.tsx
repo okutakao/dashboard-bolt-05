@@ -325,11 +325,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
 
       switch (format) {
         case 'markdown':
-          content = convertToMarkdown(mockOutline, formData.tone);
+          content = convertToMarkdown(mockOutline);
           filename = `${baseFilename}.md`;
           break;
         case 'html':
-          content = convertToHTML(mockOutline, formData.tone);
+          content = convertToHTML(mockOutline);
           filename = `${baseFilename}.html`;
           break;
         default:

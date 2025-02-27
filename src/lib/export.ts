@@ -1,7 +1,7 @@
 import { MockOutline } from './mockData';
 
 // マークダウンへの変換
-export function convertToMarkdown(outline: MockOutline, tone: string): string {
+export function convertToMarkdown(outline: MockOutline): string {
   let markdown = `# ${outline.title}\n\n`;
 
   outline.sections.forEach((section) => {
@@ -18,7 +18,7 @@ export function convertToMarkdown(outline: MockOutline, tone: string): string {
 }
 
 // HTMLへの変換
-export function convertToHTML(outline: MockOutline, tone: string): string {
+export function convertToHTML(outline: MockOutline): string {
   let html = `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -38,7 +38,7 @@ export function convertToHTML(outline: MockOutline, tone: string): string {
         h2 { color: #1e40af; margin-top: 2rem; }
         ul { margin-left: 1.5rem; }
         .description { color: #666; font-style: italic; margin-bottom: 1rem; }
-        .content { margin-bottom: 2rem; }
+        .content { margin-bottom: 2rem; white-space: pre-wrap; }
     </style>
 </head>
 <body>
