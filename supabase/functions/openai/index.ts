@@ -42,7 +42,10 @@ serve(async (req)=>{
         max_tokens: 1000,
         response_format: { type: "text" },
         top_p: 0.9,
-      })
+        presence_penalty: 0.3,
+        frequency_penalty: 0.3
+      }),
+      signal
     });
     if (!response.ok) {
       const error = await response.json();
@@ -51,10 +54,14 @@ serve(async (req)=>{
       let errorMessage = 'OpenAI APIリクエストに失敗しました';
       if (error.error?.code === 'rate_limit_exceeded') {
         errorMessage = 'APIの利用制限に達しました。しばらく待ってから再試行してください。';
+        // レート制限の場合は少し長めに待機
+        await new Promise(resolve => setTimeout(resolve, 2000));
       } else if (error.error?.code === 'context_length_exceeded') {
         errorMessage = '入力テキストが長すぎます。内容を短くしてください。';
       } else if (error.error?.code === 'invalid_api_key') {
         errorMessage = 'API認証に失敗しました。システム管理者に連絡してください。';
+      } else if (error.error?.code === 'model_not_found') {
+        errorMessage = '指定されたモデルが見つかりません。';
       }
       
       throw new Error(errorMessage);

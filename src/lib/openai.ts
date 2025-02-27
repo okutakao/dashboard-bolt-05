@@ -15,6 +15,8 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
         throw new Error('AbortError');
       }
 
+      console.log(`🔄 APIリクエストを実行中... (試行: ${retryCount + 1}/${maxRetries + 1})`);
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -24,6 +26,12 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages,
+          temperature: 0.7,
+          max_tokens: 1000,
+          response_format: { type: "text" },
+          top_p: 0.9,
+          presence_penalty: 0.3,
+          frequency_penalty: 0.3,
           ...options,
         }),
         signal,
@@ -32,16 +40,27 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
       if (!response.ok) {
         const error = await response.json();
         console.error('❌ OpenAI APIエラー:', error);
+        
+        if (error.error?.code === 'rate_limit_exceeded' && retryCount < maxRetries) {
+          const delay = baseDelay * Math.pow(2, retryCount);
+          console.log(`⏳ レート制限により待機中... ${delay}ms後にリトライします`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          retryCount++;
+          continue;
+        }
+        
         throw new Error(error.error?.message || 'OpenAI APIリクエストが失敗しました');
       }
 
       const data = await response.json();
+      console.log('✅ APIリクエスト成功');
       return data.choices[0].message.content;
 
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError' || signal?.aborted) {
-          throw new Error('AbortError');
+          console.log('❌ リクエストが中断されました');
+          throw new Error('リクエストが中断されました');
         }
 
         if (retryCount === maxRetries) {
@@ -50,7 +69,7 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
         }
 
         const delay = baseDelay * Math.pow(2, retryCount);
-        console.log(`⏳ ${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
+        console.log(`⏳ エラーが発生しました。${delay}ms後にリトライします (${retryCount + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         retryCount++;
       } else {
