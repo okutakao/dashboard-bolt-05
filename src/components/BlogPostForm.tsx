@@ -83,7 +83,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         }
       } catch (err: unknown) {
         const error = err as Error;
-        setToast({ type: 'error', message: '記事の取得中にエラーが発生しました' });
+        setToast({ type: 'error', message: error.message || '記事の取得中にエラーが発生しました' });
       }
     };
 
