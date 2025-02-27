@@ -252,7 +252,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         content: s.content
       }));
 
-      const content = await generateBlogContent(
+      const newContent = await generateBlogContent(
         formData.theme,
         sections[index].title,
         previousSections,
@@ -263,29 +263,19 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       const newSections = [...sections];
       newSections[index] = {
         ...newSections[index],
-        content,
+        content: newContent,
         updatedAt: new Date().toISOString()
       };
       setSections(newSections);
-
-      setToast({
-        type: 'success',
-        message: 'セクションの内容を生成しました'
-      });
+      setToast({ type: 'success', message: 'セクションの内容を生成しました' });
     } catch (error) {
       if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          setToast({
-            type: 'info',
-            message: '生成をキャンセルしました'
-          });
-        } else {
-          console.error('Error generating content:', error);
-          setToast({
-            type: 'error',
-            message: '内容の生成中にエラーが発生しました'
-          });
-        }
+        setToast({
+          type: 'error',
+          message: error.message === 'AbortError'
+            ? '生成をキャンセルしました'
+            : '内容の生成中にエラーが発生しました'
+        });
       }
     } finally {
       setGeneratingSections(prev => prev.filter(i => i !== index));
@@ -293,6 +283,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         const newControllers = { ...prev };
         delete newControllers[index];
         return newControllers;
+      });
+      setAbortingStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[index];
+        return newStates;
       });
     }
   };

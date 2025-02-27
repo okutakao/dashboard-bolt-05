@@ -1,6 +1,5 @@
-import { WritingTone } from '../types';
+import { WritingTone, OpenAIMessage } from './types';
 import { ArticleStructure } from './models';
-import { OpenAIMessage } from './types';
 
 /**
  * OpenAI APIを呼び出す共通関数
@@ -67,7 +66,7 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
  * ChatGPTにメッセージを送信し、応答を取得する
  */
 export async function sendChatMessage(message: string): Promise<string> {
-  return callOpenAIFunction([{ role: "user", content: message }]);
+  return callOpenAIFunction([{ role: "user" as const, content: message }]);
 }
 
 /**
@@ -78,8 +77,8 @@ export async function sendChatMessageWithSystem(
   userMessage: string
 ): Promise<string> {
   return callOpenAIFunction([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userMessage }
+    { role: "system" as const, content: systemPrompt },
+    { role: "user" as const, content: userMessage }
   ]);
 }
 
