@@ -156,9 +156,11 @@ export function SortableSection({
         </div>
         <div className="pl-7 space-y-4">
           {section.description && (
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
-              {section.description}
-            </p>
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                {section.description}
+              </p>
+            </div>
           )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
