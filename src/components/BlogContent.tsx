@@ -25,6 +25,8 @@ type BlogContentProps = {
 
 export function BlogContent({ outline, isGenerating = false, onContentReorder, activeSection = 0, onRegenerateAll }: BlogContentProps) {
   const [sectionContents, setSectionContents] = useState<Record<number, string>>({});
+  const [generatingSections, setGeneratingSections] = useState<number[]>([]);
+  const [abortControllers, setAbortControllers] = useState<Record<number, AbortController>>({});
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const sensors = useSensors(
@@ -53,6 +55,10 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleRegenerateSection = async (index: number) => {
+    const controller = new AbortController();
+    setAbortControllers(prev => ({ ...prev, [index]: controller }));
+    setGeneratingSections(prev => [...prev, index]);
+
     try {
       const section = outline.sections[index];
       const previousSections = outline.sections.slice(0, index).map(s => ({
@@ -65,7 +71,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         section.title,
         previousSections,
         index === outline.sections.length - 1,
-        undefined
+        controller.signal
       );
 
       setSectionContents(prev => ({
@@ -78,11 +84,32 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       });
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('Error regenerating section:', error);
-      setToast({
-        type: 'error',
-        message: error.message || 'セクションの再生成に失敗しました'
+      if (error.name === 'AbortError') {
+        setToast({
+          type: 'info',
+          message: '生成を中止しました'
+        });
+      } else {
+        console.error('Error regenerating section:', error);
+        setToast({
+          type: 'error',
+          message: error.message || 'セクションの再生成に失敗しました'
+        });
+      }
+    } finally {
+      setGeneratingSections(prev => prev.filter(i => i !== index));
+      setAbortControllers(prev => {
+        const newControllers = { ...prev };
+        delete newControllers[index];
+        return newControllers;
       });
+    }
+  };
+
+  const handleAbortGeneration = (index: number) => {
+    const controller = abortControllers[index];
+    if (controller) {
+      controller.abort();
     }
   };
 
@@ -151,6 +178,8 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                   isActive={index === activeSection}
                   onContentChange={handleContentChange}
                   onRegenerate={handleRegenerateSection}
+                  isGenerating={generatingSections.includes(index)}
+                  onAbort={() => handleAbortGeneration(index)}
                 />
               ))}
             </div>

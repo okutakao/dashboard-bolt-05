@@ -12,13 +12,24 @@ type SortableSectionProps = {
   isActive?: boolean;
   onContentChange: (index: number, content: string) => void;
   onRegenerate: (index: number) => Promise<void>;
+  isGenerating?: boolean;
+  onAbort?: () => void;
 };
 
-export function SortableSection({ section, index, id, content: initialContent, isActive, onContentChange, onRegenerate }: SortableSectionProps) {
+export function SortableSection({ 
+  section, 
+  index, 
+  id, 
+  content: initialContent, 
+  isActive, 
+  onContentChange, 
+  onRegenerate,
+  isGenerating = false,
+  onAbort 
+}: SortableSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(initialContent);
   const [tempContent, setTempContent] = useState(initialContent);
-  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const {
     attributes,
@@ -53,11 +64,10 @@ export function SortableSection({ section, index, id, content: initialContent, i
   };
 
   const handleRegenerate = async () => {
-    setIsRegenerating(true);
     try {
       await onRegenerate(index);
-    } finally {
-      setIsRegenerating(false);
+    } catch (error) {
+      console.error('Error regenerating content:', error);
     }
   };
 
@@ -84,10 +94,21 @@ export function SortableSection({ section, index, id, content: initialContent, i
             <h2 className="text-2xl font-bold">{section.title}</h2>
           </div>
           <div className="flex items-center gap-2">
-            {isRegenerating ? (
-              <div className="flex items-center gap-2 text-blue-500 dark:text-blue-400">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span className="text-sm">生成中...</span>
+            {isGenerating ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-blue-500 dark:text-blue-400">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">生成中...</span>
+                </div>
+                {onAbort && (
+                  <button
+                    onClick={onAbort}
+                    className="p-1.5 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-500 transition-colors"
+                    title="生成を中止"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ) : (
               <button
@@ -128,7 +149,7 @@ export function SortableSection({ section, index, id, content: initialContent, i
         </div>
         <div className="pl-7 space-y-4">
           {section.description && (
-            <p className="text-gray-600 dark:text-gray-400 italic">
+            <p className="text-gray-600 dark:text-gray-400 italic mb-4">
               {section.description}
             </p>
           )}
