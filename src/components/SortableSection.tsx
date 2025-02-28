@@ -102,7 +102,14 @@ export function SortableSection({
             </button>
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{section.title}</h2>
-              <div className="flex items-center gap-2 mt-1">
+              {section.description && (
+                <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    {section.description}
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-2">
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   推奨文字数: {targetLength}文字
                 </span>
@@ -172,13 +179,6 @@ export function SortableSection({
           </div>
         </div>
         <div className="pl-7 space-y-4">
-          {section.description && (
-            <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                {section.description}
-              </p>
-            </div>
-          )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
               <textarea
