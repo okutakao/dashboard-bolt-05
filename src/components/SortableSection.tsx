@@ -96,7 +96,14 @@ export function SortableSection({
             >
               <GripVertical className="h-4 w-4" />
             </button>
-            <h2 className="text-2xl font-bold">{section.title}</h2>
+            <div>
+              <h2 className="text-2xl font-bold">{section.title}</h2>
+              {section.description && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {section.description}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isGenerating ? (
@@ -153,11 +160,6 @@ export function SortableSection({
           </div>
         </div>
         <div className="pl-7 space-y-4">
-          {section.description && (
-            <p className="text-gray-600 dark:text-gray-400 italic mb-4">
-              {section.description}
-            </p>
-          )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
               <textarea
