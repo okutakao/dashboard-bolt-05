@@ -46,6 +46,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': '/src',
       'zwitch': 'zwitch/index.js'
     },
     dedupe: ['react', 'react-dom'],

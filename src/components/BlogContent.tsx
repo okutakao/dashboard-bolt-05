@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { RefreshCw, Loader2 } from 'lucide-react';
@@ -7,7 +7,7 @@ import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 import { MockOutline } from '../lib/mockData';
 import { Toast } from './ui/toast';
-import { SortableSection } from './SortableSection';
+import { SortableSection } from './SortableSection.js';
 import { useSensors, useSensor, PointerSensor } from '@dnd-kit/core';
 
 type BlogContentProps = {
