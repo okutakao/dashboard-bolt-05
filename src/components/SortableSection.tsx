@@ -115,57 +115,57 @@ export function SortableSection({
           <div className="flex items-center gap-2">
             {isGenerating ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md shadow-sm">
                   <RefreshCw className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-                  <span className="text-sm text-blue-600 dark:text-blue-400">生成中...</span>
+                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">生成中...</span>
                 </div>
                 {onAbort && (
                   <button
                     onClick={onAbort}
-                    className="flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-500 rounded-md transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-md shadow-sm transition-all duration-200"
                     title="生成を中止"
                   >
                     <X className="h-4 w-4" />
-                    <span className="text-sm">中止</span>
+                    <span className="text-sm font-medium">中止</span>
                   </button>
                 )}
               </div>
             ) : (
               <button
                 onClick={handleRegenerate}
-                className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 rounded-md shadow-sm transition-all duration-200"
                 title="セクションを再生成"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span className="text-sm">内容を生成</span>
+                <span className="text-sm font-medium">内容を生成</span>
               </button>
             )}
             {!isEditing ? (
               <button
                 onClick={handleEdit}
-                className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 rounded-md shadow-sm transition-all duration-200"
                 title="セクションを編集"
               >
                 <Edit2 className="h-4 w-4" />
-                <span className="text-sm">編集</span>
+                <span className="text-sm font-medium">編集</span>
               </button>
             ) : (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-green-50 dark:bg-gray-800 dark:hover:bg-green-900/20 border border-gray-200 dark:border-gray-700 text-gray-700 hover:text-green-600 dark:text-gray-300 dark:hover:text-green-400 rounded-md shadow-sm transition-all duration-200"
                   title="変更を保存"
                 >
                   <Save className="h-4 w-4" />
-                  <span className="text-sm">保存</span>
+                  <span className="text-sm font-medium">保存</span>
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border border-gray-200 dark:border-gray-700 text-gray-700 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400 rounded-md shadow-sm transition-all duration-200"
                   title="編集をキャンセル"
                 >
                   <X className="h-4 w-4" />
-                  <span className="text-sm">キャンセル</span>
+                  <span className="text-sm font-medium">キャンセル</span>
                 </button>
               </div>
             )}
