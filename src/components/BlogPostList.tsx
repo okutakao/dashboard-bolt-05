@@ -218,7 +218,7 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
         downloadFile(html, `${filename}.html`, 'html');
       }
     } catch (error) {
-      console.error('記事のエクスポート中にエラーが発生:', error);
+      console.error('エクスポート中にエラーが発生:', error);
     }
   };
 
@@ -232,43 +232,44 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="p-6">
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
-          <Clock className="h-4 w-4" />
-          <span>{formatDate(post.updatedAt)}</span>
-          <Tag className="h-4 w-4 ml-2" />
-          <span>{formatTone(post.tone)}</span>
-        </div>
-        <h2 className="text-xl font-semibold mb-2 line-clamp-2">
-          {post.title}
-        </h2>
-        <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
-          {post.theme}
-        </p>
-        <div className="flex items-center justify-between mt-4">
-          <BlogPostStatusToggle
-            post={post}
-            onStatusChange={onStatusChange}
-          />
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <ExportMenu onExport={handleExport} />
+            <Tag className="h-4 w-4 text-gray-500" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">{post.theme}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ExportMenu onExport={handleExport} variant="compact" />
             <button
               onClick={() => onSelect(post.id)}
-              className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+              className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
               title="編集"
             >
-              <Edit2 className="h-5 w-5" />
+              <Edit2 className="h-4 w-4" />
             </button>
             <button
               onClick={() => onDelete(post.id)}
-              className="p-2 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+              className="p-2 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
               title="削除"
             >
-              <Trash2 className="h-5 w-5" />
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         </div>
+        <h3
+          className="text-lg font-semibold mb-2 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+          onClick={() => onSelect(post.id)}
+        >
+          {post.title}
+        </h3>
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <Clock className="h-4 w-4" />
+          <span>{formatDate(post.updatedAt)}</span>
+        </div>
+      </div>
+      <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
+        <BlogPostStatusToggle post={post} onStatusChange={onStatusChange} />
       </div>
     </div>
   );
