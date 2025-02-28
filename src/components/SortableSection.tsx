@@ -76,6 +76,10 @@ export function SortableSection({
     }
   };
 
+  const currentLength = isEditing ? tempContent.length : content.length;
+  const targetLength = section.recommendedLength || 0;
+  const lengthStatus = currentLength >= targetLength ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400';
+
   return (
     <section
       ref={setNodeRef}
@@ -98,6 +102,14 @@ export function SortableSection({
             </button>
             <div>
               <h2 className="text-2xl font-bold">{section.title}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  推奨文字数: {targetLength}文字
+                </span>
+                <span className={`text-sm ${lengthStatus}`}>
+                  現在の文字数: {currentLength}文字
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
