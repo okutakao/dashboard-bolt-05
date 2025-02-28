@@ -115,52 +115,57 @@ export function SortableSection({
           <div className="flex items-center gap-2">
             {isGenerating ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 text-blue-500 dark:text-blue-400">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">生成中...</span>
+                <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
+                  <span className="text-sm text-blue-600 dark:text-blue-400">生成中...</span>
                 </div>
                 {onAbort && (
                   <button
                     onClick={onAbort}
-                    className="p-1.5 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-500 transition-colors"
+                    className="flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-500 rounded-md transition-colors"
                     title="生成を中止"
                   >
                     <X className="h-4 w-4" />
+                    <span className="text-sm">中止</span>
                   </button>
                 )}
               </div>
             ) : (
               <button
                 onClick={handleRegenerate}
-                className="p-1.5 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="セクションを再生成"
               >
                 <RefreshCw className="h-4 w-4" />
+                <span className="text-sm">内容を生成</span>
               </button>
             )}
             {!isEditing ? (
               <button
                 onClick={handleEdit}
-                className="p-1.5 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="セクションを編集"
               >
                 <Edit2 className="h-4 w-4" />
+                <span className="text-sm">編集</span>
               </button>
             ) : (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSave}
-                  className="p-1.5 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors"
                   title="変更を保存"
                 >
                   <Save className="h-4 w-4" />
+                  <span className="text-sm">保存</span>
                 </button>
                 <button
                   onClick={handleCancel}
-                  className="p-1.5 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1 text-gray-600 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                   title="編集をキャンセル"
                 >
                   <X className="h-4 w-4" />
+                  <span className="text-sm">キャンセル</span>
                 </button>
               </div>
             )}
