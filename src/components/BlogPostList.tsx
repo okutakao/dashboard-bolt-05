@@ -1,10 +1,10 @@
 import React from 'react';
-import { FileText, Edit2, Trash2, Clock, Tag, Save, Download } from 'lucide-react';
+import { Edit2, Trash2, FileText, Clock, Tag, Save } from 'lucide-react';
 import { BlogPost } from '../lib/models';
 import { useBlogPosts } from '../hooks/useBlogPosts';
 import { deleteBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
-import { Toast } from './Toast';
+import { Toast } from './ui/toast';
 import { BlogPostStatusToggle } from './BlogPostStatusToggle';
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
@@ -185,7 +185,14 @@ export function BlogPostList({ onSelectPost, onCreatePost }: BlogPostListProps) 
         </div>
       )}
 
-      {toast && <Toast type={toast.type} message={toast.message} />}
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
