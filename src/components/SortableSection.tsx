@@ -54,8 +54,11 @@ export function SortableSection({ section, index, id, content: initialContent, i
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
-    await onRegenerate(index);
-    setIsRegenerating(false);
+    try {
+      await onRegenerate(index);
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   return (
@@ -81,15 +84,20 @@ export function SortableSection({ section, index, id, content: initialContent, i
             <h2 className="text-2xl font-bold">{section.title}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleRegenerate}
-              disabled={isRegenerating}
-              className={`p-1.5 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors
-                ${isRegenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="セクションを再生成"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRegenerating ? 'animate-spin' : ''}`} />
-            </button>
+            {isRegenerating ? (
+              <div className="flex items-center gap-2 text-blue-500 dark:text-blue-400">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span className="text-sm">生成中...</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleRegenerate}
+                className="p-1.5 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                title="セクションを再生成"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            )}
             {!isEditing ? (
               <button
                 onClick={handleEdit}
@@ -119,9 +127,11 @@ export function SortableSection({ section, index, id, content: initialContent, i
           </div>
         </div>
         <div className="pl-7 space-y-4">
-          <p className="text-gray-600 dark:text-gray-400 italic">
-            {section.description}
-          </p>
+          {section.description && (
+            <p className="text-gray-600 dark:text-gray-400 italic">
+              {section.description}
+            </p>
+          )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
               <textarea
@@ -130,11 +140,6 @@ export function SortableSection({ section, index, id, content: initialContent, i
                 className="w-full h-48 p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="セクションの内容を入力..."
               />
-            ) : isRegenerating ? (
-              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
-                <RefreshCw className="h-6 w-6 animate-spin mr-3" />
-                <span>内容を生成中...</span>
-              </div>
             ) : (
               <div className="whitespace-pre-wrap">{content}</div>
             )}

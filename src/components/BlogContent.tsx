@@ -10,17 +10,17 @@ import { Toast } from './ui/toast';
 import { SortableSection } from './SortableSection.js';
 import { useSensors, useSensor, PointerSensor } from '@dnd-kit/core';
 
-type BlogContentProps = {
-  outline: MockOutline;
-  isGenerating?: boolean;
-  onContentReorder?: (reorderedOutline: MockOutline) => void;
-  activeSection?: number;
-  onRegenerateAll?: () => void;
-};
-
 type ToastState = {
   type: 'success' | 'error' | 'info';
   message: string;
+};
+
+type BlogContentProps = {
+  outline: MockOutline;
+  isGenerating?: boolean;
+  onContentReorder: (fromIndex: number, toIndex: number) => void;
+  activeSection?: number;
+  onRegenerateAll?: () => Promise<void>;
 };
 
 export function BlogContent({ outline, isGenerating = false, onContentReorder, activeSection = 0, onRegenerateAll }: BlogContentProps) {
@@ -39,22 +39,16 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = parseInt(active.id.toString());
-      const newIndex = parseInt(over.id.toString());
-
-      const newSections = arrayMove(outline.sections, oldIndex, newIndex);
-      const newOutline = { ...outline, sections: newSections };
-
-      if (onContentReorder) {
-        onContentReorder(newOutline);
-      }
+      const fromIndex = parseInt(active.id.toString());
+      const toIndex = parseInt(over.id.toString());
+      onContentReorder(fromIndex, toIndex);
     }
   };
 
-  const handleContentChange = (index: number, newContent: string) => {
+  const handleContentChange = (index: number, content: string) => {
     setSectionContents(prev => ({
       ...prev,
-      [index]: newContent
+      [index]: content
     }));
   };
 
@@ -151,12 +145,9 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                 <SortableSection
                   key={index}
                   id={index.toString()}
-                  section={{
-                    ...section,
-                    description: section.description || '概要を生成中...'
-                  }}
+                  section={section}
                   index={index}
-                  content={sectionContents[index] || ''}
+                  content={sectionContents[index] || section.content || ''}
                   isActive={index === activeSection}
                   onContentChange={handleContentChange}
                   onRegenerate={handleRegenerateSection}
@@ -171,8 +162,8 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         <Toast
           type={toast.type}
           message={toast.message}
-          onClose={() => setToast(null)}
           duration={3000}
+          onClose={() => setToast(null)}
         />
       )}
     </div>
