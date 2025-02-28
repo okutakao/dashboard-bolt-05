@@ -266,6 +266,9 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Clock className="h-4 w-4" />
           <span>{formatDate(post.updatedAt)}</span>
+          <span className="mx-2">•</span>
+          <Tag className="h-4 w-4" />
+          <span>{formatTone(post.tone)}</span>
         </div>
       </div>
       <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
