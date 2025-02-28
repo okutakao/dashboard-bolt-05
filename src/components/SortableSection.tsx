@@ -98,11 +98,6 @@ export function SortableSection({
             </button>
             <div>
               <h2 className="text-2xl font-bold">{section.title}</h2>
-              {section.description && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {section.description}
-                </p>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -160,6 +155,11 @@ export function SortableSection({
           </div>
         </div>
         <div className="pl-7 space-y-4">
+          {section.description && (
+            <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 bg-gray-50 dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
+              {section.description}
+            </p>
+          )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
               <textarea
