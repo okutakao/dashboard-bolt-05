@@ -1,12 +1,15 @@
 import { MockOutline } from './mockData';
+import { BlogPost } from './models';
+
+type ExportableContent = MockOutline | BlogPost;
 
 // マークダウンへの変換
-export function convertToMarkdown(outline: MockOutline): string {
-  let markdown = `# ${outline.title}\n\n`;
+export function convertToMarkdown(content: ExportableContent): string {
+  let markdown = `# ${content.title}\n\n`;
 
-  outline.sections.forEach((section) => {
+  content.sections.forEach((section) => {
     markdown += `## ${section.title}\n\n`;
-    if (section.description) {
+    if ('description' in section && section.description) {
       markdown += `${section.description}\n\n`;
     }
     if (section.content) {
@@ -18,43 +21,34 @@ export function convertToMarkdown(outline: MockOutline): string {
 }
 
 // HTMLへの変換
-export function convertToHTML(outline: MockOutline): string {
+export function convertToHTML(content: ExportableContent): string {
   let html = `<!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${outline.title}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-            color: #333;
-        }
-        h1 { color: #2563eb; margin-bottom: 2rem; }
-        h2 { color: #1e40af; margin-top: 2rem; }
-        ul { margin-left: 1.5rem; }
-        .description { color: #666; font-style: italic; margin-bottom: 1rem; }
-        .content { margin-bottom: 2rem; white-space: pre-wrap; }
-    </style>
+  <meta charset="UTF-8">
+  <title>${content.title}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 2rem; }
+    h1 { color: #1a202c; }
+    h2 { color: #2d3748; margin-top: 2rem; }
+    p { color: #4a5568; }
+  </style>
 </head>
 <body>
-    <h1>${outline.title}</h1>`;
+  <h1>${content.title}</h1>
+`;
 
-  outline.sections.forEach((section) => {
-    html += `
-    <section>
-        <h2>${section.title}</h2>
-        ${section.description ? `<p class="description">${section.description}</p>` : ''}
-        ${section.content ? `<div class="content">${section.content}</div>` : ''}
-    </section>`;
+  content.sections.forEach((section) => {
+    html += `  <h2>${section.title}</h2>\n`;
+    if ('description' in section && section.description) {
+      html += `  <p>${section.description}</p>\n`;
+    }
+    if (section.content) {
+      html += `  <p>${section.content}</p>\n`;
+    }
   });
 
-  html += `
-</body>
+  html += `</body>
 </html>`;
 
   return html;

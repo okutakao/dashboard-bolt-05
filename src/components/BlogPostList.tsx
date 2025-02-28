@@ -6,7 +6,8 @@ import { deleteBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
 import { Toast } from './Toast';
 import { BlogPostStatusToggle } from './BlogPostStatusToggle';
-import { downloadPost } from '../lib/exportUtils';
+import { ExportMenu } from './ExportMenu';
+import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 
 type BlogPostListProps = {
   onSelectPost: (postId: string) => void;
@@ -198,10 +199,17 @@ type PostCardProps = {
 };
 
 function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: PostCardProps) {
-  const handleExport = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleExport = (format: ExportFormat) => {
     try {
-      downloadPost(post);
+      const filename = `${post.title.replace(/[<>:"/\\|?*]/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'markdown') {
+        const markdown = convertToMarkdown(post);
+        downloadFile(markdown, `${filename}.md`, 'markdown');
+      } else if (format === 'html') {
+        const html = convertToHTML(post);
+        downloadFile(html, `${filename}.html`, 'html');
+      }
     } catch (error) {
       console.error('記事のエクスポート中にエラーが発生:', error);
     }
@@ -237,13 +245,7 @@ function PostCard({ post, onSelect, onDelete, onStatusChange, formatDate }: Post
             onStatusChange={onStatusChange}
           />
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExport}
-              className="p-2 text-gray-600 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 transition-colors"
-              title="マークダウンでエクスポート"
-            >
-              <Download className="h-5 w-5" />
-            </button>
+            <ExportMenu onExport={handleExport} />
             <button
               onClick={() => onSelect(post.id)}
               className="p-2 text-gray-600 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"

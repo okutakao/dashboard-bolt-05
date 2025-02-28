@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Edit2, Download } from 'lucide-react';
+import { ArrowLeft, Edit2 } from 'lucide-react';
 import { BlogPost } from '../lib/models';
-import { Toast } from './Toast';
-import { downloadPost } from '../lib/exportUtils';
+import { Toast } from './ui/toast';
 import { getBlogPost } from '../lib/supabase/blogService';
 import { useAuth } from '../contexts/AuthContext';
+import { ExportMenu } from './ExportMenu';
+import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 
 type BlogPostDetailProps = {
   postId: string;
@@ -63,14 +64,22 @@ export function BlogPostDetail({ postId, onBack, onEdit }: BlogPostDetailProps) 
     return toneMap[tone] || tone;
   };
 
-  const handleDownload = () => {
+  const handleExport = (format: ExportFormat) => {
     if (!post) return;
     try {
-      downloadPost(post);
-      setToast({ type: 'success', message: '記事をダウンロードしました' });
+      const filename = `${post.title.replace(/[<>:"/\\|?*]/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'markdown') {
+        const markdown = convertToMarkdown(post);
+        downloadFile(markdown, `${filename}.md`, 'markdown');
+      } else if (format === 'html') {
+        const html = convertToHTML(post);
+        downloadFile(html, `${filename}.html`, 'html');
+      }
+      setToast({ type: 'success', message: 'エクスポートが完了しました' });
     } catch (error) {
-      console.error('記事のダウンロード中にエラーが発生:', error);
-      setToast({ type: 'error', message: '記事のダウンロードに失敗しました' });
+      console.error('エクスポート中にエラーが発生:', error);
+      setToast({ type: 'error', message: 'エクスポートに失敗しました' });
     }
   };
 
@@ -115,14 +124,7 @@ export function BlogPostDetail({ postId, onBack, onEdit }: BlogPostDetailProps) 
             <Edit2 className="h-5 w-5" />
             <span>編集</span>
           </button>
-          <button
-            onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-2 focus:ring-green-500 transition-colors"
-            title="マークダウンでエクスポート"
-          >
-            <Download className="h-5 w-5" />
-            <span>エクスポート</span>
-          </button>
+          <ExportMenu onExport={handleExport} />
         </div>
       </div>
 
