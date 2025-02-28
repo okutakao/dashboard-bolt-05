@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { generateBlogContent } from '../lib/openai';
 import { ExportMenu } from './ExportMenu';
