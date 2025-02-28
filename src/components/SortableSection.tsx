@@ -102,13 +102,24 @@ export function SortableSection({
             </button>
             <div>
               <h2 className="text-2xl font-bold">{section.title}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  推奨文字数: {targetLength}文字
-                </span>
-                <span className={`text-sm ${lengthStatus}`}>
-                  現在の文字数: {currentLength}文字
-                </span>
+              {section.description && (
+                <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    {section.description}
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    推奨文字数: {targetLength}文字
+                  </span>
+                </div>
+                <div className={`flex items-center gap-2 px-3 py-1.5 ${currentLength >= targetLength ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'} border rounded-md`}>
+                  <span className={`text-sm ${lengthStatus}`}>
+                    現在の文字数: {currentLength}文字
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -172,13 +183,6 @@ export function SortableSection({
           </div>
         </div>
         <div className="pl-7 space-y-4">
-          {section.description && (
-            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                {section.description}
-              </p>
-            </div>
-          )}
           <div className="prose dark:prose-invert max-w-none">
             {isEditing ? (
               <textarea
