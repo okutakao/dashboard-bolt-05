@@ -96,7 +96,21 @@ export function SortableSection({
             >
               <GripVertical className="h-4 w-4" />
             </button>
-            <h2 className="text-2xl font-bold">{section.title}</h2>
+            <div>
+              <h2 className="text-2xl font-bold">{section.title}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {section.recommendedLength ? (
+                  <>
+                    推奨文字数: {section.recommendedLength.min}〜{section.recommendedLength.max} 文字
+                    {content && ` / 現在: ${content.length} 文字`}
+                  </>
+                ) : (
+                  <>
+                    {content && `現在の文字数: ${content.length} 文字`}
+                  </>
+                )}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isGenerating ? (

@@ -7,6 +7,10 @@ type MockOutline = {
     title: string;
     description: string;
     content?: string;
+    recommendedLength?: {
+      min: number;
+      max: number;
+    };
   }>;
 };
 
