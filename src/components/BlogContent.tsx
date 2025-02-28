@@ -151,7 +151,10 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                 <SortableSection
                   key={index}
                   id={index.toString()}
-                  section={section}
+                  section={{
+                    ...section,
+                    description: section.description || '概要を生成中...'
+                  }}
                   index={index}
                   content={sectionContents[index] || ''}
                   isActive={index === activeSection}

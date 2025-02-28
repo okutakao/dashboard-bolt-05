@@ -130,15 +130,13 @@ export function SortableSection({ section, index, id, content: initialContent, i
                 className="w-full h-48 p-3 border rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="セクションの内容を入力..."
               />
+            ) : isRegenerating ? (
+              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                <RefreshCw className="h-6 w-6 animate-spin mr-3" />
+                <span>内容を生成中...</span>
+              </div>
             ) : (
-              <>
-                <p>{content}</p>
-                <ul>
-                  <li>重要なポイント1</li>
-                  <li>重要なポイント2</li>
-                  <li>重要なポイント3</li>
-                </ul>
-              </>
+              <div className="whitespace-pre-wrap">{content}</div>
             )}
           </div>
         </div>
