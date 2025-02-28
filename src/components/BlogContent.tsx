@@ -272,57 +272,32 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleExport = (format: ExportFormat) => {
-    try {
-      let content: string;
-      let filename: string;
-      const baseFilename = outline.title.toLowerCase().replace(/\s+/g, '-');
-
-      switch (format) {
-        case 'markdown':
-          content = convertToMarkdown(outline);
-          filename = `${baseFilename}.md`;
-          break;
-        case 'html':
-          content = convertToHTML(outline);
-          filename = `${baseFilename}.html`;
-          break;
-        default:
-          throw new Error('不正なフォーマットです');
-      }
-
-      downloadFile(content, filename, format);
-      setToast({
-        type: 'success',
-        message: `${format.toUpperCase()}ファイルをダウンロードしました`
-      });
-    } catch (error) {
-      setToast({
-        type: 'error',
-        message: 'ファイルのエクスポートに失敗しました'
-      });
+    const filename = `${outline.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+    
+    if (format === 'markdown') {
+      const markdown = convertToMarkdown(outline);
+      downloadFile(markdown, `${filename}.md`, 'markdown');
+    } else if (format === 'html') {
+      const html = convertToHTML(outline);
+      downloadFile(html, `${filename}.html`, 'html');
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <FileText className="h-6 w-6 text-blue-500" />
-          <h1 className="text-3xl font-bold">{outline.title}</h1>
-        </div>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center gap-4 mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          {outline.title}
+        </h1>
         <div className="flex items-center gap-4">
-          {onRegenerateAll && (
-            <button
-              onClick={onRegenerateAll}
-              disabled={isGenerating}
-              className={`flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-700 transition-colors
-                ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="記事全体を再生成"
-            >
-              <RefreshCw className={`h-5 w-5 ${isGenerating ? 'animate-spin' : ''}`} />
-              <span>再生成</span>
-            </button>
-          )}
+          <button
+            onClick={onRegenerateAll}
+            disabled={isGenerating}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+          >
+            <RefreshCw className={`h-5 w-5 ${isGenerating ? 'animate-spin' : ''}`} />
+            <span>全体を再生成</span>
+          </button>
           <ExportMenu onExport={handleExport} />
         </div>
       </div>
