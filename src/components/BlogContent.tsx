@@ -7,7 +7,7 @@ import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
 import { MockOutline } from '../lib/mockData';
 import { Toast } from './ui/toast';
-import { SortableSection } from './SortableSection.js';
+import { SortableSection } from './SortableSection';
 import { useSensors, useSensor, PointerSensor } from '@dnd-kit/core';
 
 type ToastState = {
@@ -55,11 +55,11 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleRegenerateSection = async (index: number) => {
-    const controller = new AbortController();
-    setAbortControllers(prev => ({ ...prev, [index]: controller }));
-    setGeneratingSections(prev => [...prev, index]);
-
     try {
+      setGeneratingSections(prev => [...prev, index]);
+      const controller = new AbortController();
+      setAbortControllers(prev => ({ ...prev, [index]: controller }));
+
       const section = outline.sections[index];
       const previousSections = outline.sections.slice(0, index).map(s => ({
         title: s.title,
@@ -82,8 +82,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         type: 'success',
         message: 'セクションを再生成しました'
       });
-    } catch (err: unknown) {
-      const error = err as Error;
+    } catch (error: any) {
       if (error.name === 'AbortError') {
         setToast({
           type: 'info',
@@ -107,9 +106,21 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleAbortGeneration = (index: number) => {
-    const controller = abortControllers[index];
-    if (controller) {
-      controller.abort();
+    try {
+      const controller = abortControllers[index];
+      if (controller) {
+        controller.abort();
+        setToast({
+          type: 'info',
+          message: '生成を中止しています...'
+        });
+      }
+    } catch (error) {
+      console.error('Error aborting generation:', error);
+      setToast({
+        type: 'error',
+        message: '生成の中止に失敗しました'
+      });
     }
   };
 
@@ -172,7 +183,10 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                 <SortableSection
                   key={index}
                   id={index.toString()}
-                  section={section}
+                  section={{
+                    ...section,
+                    description: section.description || '概要を生成中...'
+                  }}
                   index={index}
                   content={sectionContents[index] || section.content || ''}
                   isActive={index === activeSection}

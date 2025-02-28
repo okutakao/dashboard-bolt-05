@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Edit2, Save, X, RefreshCw } from 'lucide-react';
@@ -30,6 +30,11 @@ export function SortableSection({
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(initialContent);
   const [tempContent, setTempContent] = useState(initialContent);
+
+  useEffect(() => {
+    setContent(initialContent);
+    setTempContent(initialContent);
+  }, [initialContent]);
 
   const {
     attributes,
