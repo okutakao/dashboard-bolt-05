@@ -95,11 +95,19 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const handleExport = (format: ExportFormat) => {
     const filename = `${outline.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
     
+    const outlineWithContent = {
+      ...outline,
+      sections: outline.sections.map((section, index) => ({
+        ...section,
+        content: sectionContents[index] || section.content || ''
+      }))
+    };
+    
     if (format === 'markdown') {
-      const markdown = convertToMarkdown(outline);
+      const markdown = convertToMarkdown(outlineWithContent);
       downloadFile(markdown, `${filename}.md`, 'markdown');
     } else if (format === 'html') {
-      const html = convertToHTML(outline);
+      const html = convertToHTML(outlineWithContent);
       downloadFile(html, `${filename}.html`, 'html');
     }
   };
