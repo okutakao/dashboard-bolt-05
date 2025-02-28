@@ -100,43 +100,26 @@ export function SortableSection({
             >
               <GripVertical className="h-4 w-4" />
             </button>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{section.title}</h2>
-              {section.description && (
-                <div className="mt-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-                    {section.description}
-                  </p>
-                </div>
-              )}
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  推奨文字数: {targetLength}文字
-                </span>
-                <span className={`text-sm ${lengthStatus}`}>
-                  現在の文字数: {currentLength}文字
-                </span>
-              </div>
-            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{section.title}</h2>
           </div>
           <div className="flex items-center gap-2">
             {isGenerating ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md shadow-sm">
-                  <RefreshCw className="h-4 w-4 animate-spin text-blue-500 dark:text-blue-400" />
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">生成中...</span>
-                </div>
+              <>
+                <span className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  生成中...
+                </span>
                 {onAbort && (
                   <button
                     onClick={onAbort}
-                    className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 rounded-md shadow-sm transition-all duration-200"
+                    className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 rounded-md shadow-sm transition-all duration-200"
                     title="生成を中止"
                   >
                     <X className="h-4 w-4" />
                     <span className="text-sm font-medium">中止</span>
                   </button>
                 )}
-              </div>
+              </>
             ) : (
               <button
                 onClick={handleRegenerate}
@@ -177,6 +160,21 @@ export function SortableSection({
               </div>
             )}
           </div>
+        </div>
+        {section.description && (
+          <div className="mb-4">
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              {section.description}
+            </p>
+          </div>
+        )}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            推奨文字数: {targetLength}文字
+          </span>
+          <span className={`text-sm ${lengthStatus}`}>
+            現在の文字数: {currentLength}文字
+          </span>
         </div>
         <div className="pl-7 space-y-4">
           <div className="prose dark:prose-invert max-w-none">
