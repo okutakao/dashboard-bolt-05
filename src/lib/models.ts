@@ -83,6 +83,10 @@ export interface NewBlogPost {
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
+    recommendedLength: {
+      min: number;
+      max: number;
+    };
   }>;
 }
 
