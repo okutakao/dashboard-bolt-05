@@ -73,34 +73,26 @@ export interface NewBlogPost {
   tone: BlogPost['tone'];
   status: BlogPost['status'];
   mode: 'simple' | 'context';
+  userId: string;
   createdAt: string;
   updatedAt: string;
   sections: Array<{
     title: string;
     content: string;
-    description?: string;
+    description: string;
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
   }>;
 }
 
-export interface UpdateBlogPost {
-  id: string;
-  userId: string;
-  title: string;
-  theme: string;
-  tone: BlogPost['tone'];
-  status: BlogPost['status'];
-  mode: 'simple' | 'context';
-  createdAt: string;
-  updatedAt: string;
+export interface UpdateBlogPost extends BlogPost {
   sections: Array<{
     id?: string;
     postId?: string;
     title: string;
     content: string;
-    description?: string;
+    description: string;
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
@@ -132,10 +124,10 @@ export interface ArticleStructure {
 export interface ExportableContent {
   id: string;
   title: string;
-  sections: {
+  sections: Array<{
     title: string;
-    description?: string;
+    description: string;
     content?: string;
     recommendedLength?: number;
-  }[];
+  }>;
 }

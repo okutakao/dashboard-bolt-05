@@ -134,6 +134,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         tone: formData.tone,
         status: formData.status,
         mode: formData.mode,
+        userId: user.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         sections: sections.map(s => ({
@@ -148,14 +149,12 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
 
       if (post) {
         const updatedPost: UpdateBlogPost = {
-          id: post.id,
-          userId: post.userId,
+          ...post,
           title: formData.title,
           theme: formData.theme,
           tone: formData.tone,
           status: formData.status,
           mode: formData.mode,
-          createdAt: post.createdAt,
           updatedAt: new Date().toISOString(),
           sections: sections.map(s => ({
             id: s.id,
