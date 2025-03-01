@@ -25,7 +25,8 @@ type BlogContentProps = {
 
 export function BlogContent({ outline, isGenerating = false, onContentReorder, activeSection = 0, onRegenerateAll }: BlogContentProps) {
   const [sectionContents, setSectionContents] = useState<Record<number, string>>({});
-  const [abortControllers, setAbortControllers] = useState<Record<number, AbortController>>({});
+  const [generatingSections, setGeneratingSections] = useState<number[]>([]);
+  const [abortControllers] = useState<Record<number, AbortController>>({});
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const sensors = useSensors(
@@ -55,7 +56,8 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
 
   const handleRegenerateSection = async (index: number) => {
     const controller = new AbortController();
-    setAbortControllers(prev => ({ ...prev, [index]: controller }));
+    abortControllers[index] = controller;
+    setGeneratingSections(prev => [...prev, index]);
 
     try {
       const content = await generateBlogContent(
@@ -90,22 +92,16 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         message: '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
       });
     } finally {
-      setAbortControllers(prev => {
-        const newState = { ...prev };
-        delete newState[index];
-        return newState;
-      });
+      delete abortControllers[index];
+      setGeneratingSections(prev => prev.filter(i => i !== index));
     }
   };
 
   const handleAbortGeneration = (index: number) => {
-    setAbortControllers(prev => {
-      const controller = prev[index];
-      if (controller) {
-        controller.abort();
-      }
-      return prev;
-    });
+    const controller = abortControllers[index];
+    if (controller) {
+      controller.abort();
+    }
   };
 
   const handleExport = (format: ExportFormat) => {
@@ -173,7 +169,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                   isActive={index === activeSection}
                   onContentChange={handleContentChange}
                   onRegenerate={handleRegenerateSection}
-                  isGenerating={false}
+                  isGenerating={generatingSections.includes(index)}
                   onAbort={() => handleAbortGeneration(index)}
                 />
               ))}
