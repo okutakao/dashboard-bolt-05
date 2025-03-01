@@ -236,7 +236,9 @@ export async function generateBlogContent(
     signal?: AbortSignal
   ): Promise<string> => {
     if (signal?.aborted) {
-      throw new Error('AbortError');
+      const error = new Error('生成を中止しました');
+      error.name = 'AbortError';
+      throw error;
     }
 
     const systemPrompt = `あなたはブログ記事のセクションを生成するアシスタントです。
@@ -276,7 +278,9 @@ ${!isFirstSection && previousContentsContext ? '\n前のセクションの内容
   // 生成された内容の後処理を行う関数
   const postProcessContent = async (content: string, retryCount: number, signal?: AbortSignal): Promise<string> => {
     if (signal?.aborted) {
-      throw new Error('AbortError');
+      const error = new Error('生成を中止しました');
+      error.name = 'AbortError';
+      throw error;
     }
 
     let processedContent = content;
