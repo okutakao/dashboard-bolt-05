@@ -1,7 +1,7 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X, Layers, GitBranch } from 'lucide-react';
-import { BlogPost, NewBlogPost, UpdateBlogPost, FormSection, FormData } from '../lib/models';
-import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
+import { BlogPost, FormSection, FormData, NewBlogPost, UpdateBlogPost } from '../lib/models';
+import { getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
 import { ExportMenu } from './ExportMenu';
 import { convertToMarkdown, convertToHTML, downloadFile, ExportFormat } from '../lib/export';
@@ -17,10 +17,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { cn } from '../lib/utils';
 
 interface BlogPostFormProps {
   postId?: string;
-  onSave: (post: BlogPost) => Promise<void>;
+  onSave: (post: BlogPost | NewBlogPost | UpdateBlogPost) => Promise<void>;
   user: {
     id: string;
   };
