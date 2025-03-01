@@ -9,6 +9,8 @@ interface DatabaseBlogSection {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  description: string;
+  recommended_length: { min: number; max: number };
 }
 
 export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
@@ -67,9 +69,14 @@ export async function getBlogPosts(userId: string): Promise<BlogPost[]> {
             postId: section.postId,
             title: section.title,
             content: section.content,
+            description: section.description || '',
             sortOrder: section.sortOrder,
             createdAt: section.createdAt,
-            updatedAt: section.updatedAt
+            updatedAt: section.updatedAt,
+            recommendedLength: section.recommendedLength || {
+              min: 800,
+              max: 1200
+            }
           }))
       }));
     } catch (error) {
@@ -121,9 +128,14 @@ export async function getBlogPost(id: string, userId: string): Promise<BlogPost 
         postId: section.post_id,
         title: section.title,
         content: section.content,
+        description: section.description || '',
         sortOrder: section.sort_order,
         createdAt: section.created_at,
-        updatedAt: section.updated_at
+        updatedAt: section.updated_at,
+        recommendedLength: section.recommended_length || {
+          min: 800,
+          max: 1200
+        }
       }))
   };
 }
@@ -188,7 +200,12 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
       content: section.content,
       sort_order: index,
       created_at: section.createdAt,
-      updated_at: section.updatedAt
+      updated_at: section.updatedAt,
+      description: section.description || '',
+      recommended_length: section.recommendedLength || {
+        min: 800,
+        max: 1200
+      }
     }));
 
     const { data: sections, error: sectionsError } = await supabase
@@ -221,9 +238,14 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
         postId: section.post_id,
         title: section.title,
         content: section.content,
+        description: section.description || '',
         sortOrder: section.sort_order,
         createdAt: section.created_at,
-        updatedAt: section.updated_at
+        updatedAt: section.updated_at,
+        recommendedLength: section.recommended_length || {
+          min: 800,
+          max: 1200
+        }
       }))
     };
 
@@ -267,7 +289,12 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
       content: section.content,
       sort_order: index,
       created_at: section.createdAt,
-      updated_at: section.updatedAt
+      updated_at: section.updatedAt,
+      description: section.description || '',
+      recommended_length: section.recommendedLength || {
+        min: 800,
+        max: 1200
+      }
     }));
 
     // 既存のセクションを削除
@@ -305,9 +332,14 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
         postId: section.post_id,
         title: section.title,
         content: section.content,
+        description: section.description || '',
         sortOrder: section.sort_order,
         createdAt: section.created_at,
-        updatedAt: section.updated_at
+        updatedAt: section.updated_at,
+        recommendedLength: section.recommended_length || {
+          min: 800,
+          max: 1200
+        }
       }))
     };
 
@@ -369,9 +401,14 @@ export async function updateBlogPostStatus(id: string, status: BlogPost['status'
           postId: section.post_id,
           title: section.title,
           content: section.content,
+          description: section.description || '',
           sortOrder: section.sort_order,
           createdAt: section.created_at,
-          updatedAt: section.updated_at
+          updatedAt: section.updated_at,
+          recommendedLength: section.recommended_length || {
+            min: 800,
+            max: 1200
+          }
         }))
     };
   } catch (error) {

@@ -19,7 +19,11 @@ export const mockBlogPosts: BlogPost[] = [
         content: 'Reactは...',
         sortOrder: 1,
         createdAt: '2024-02-19T10:00:00Z',
-        updatedAt: '2024-02-19T10:00:00Z'
+        updatedAt: '2024-02-19T10:00:00Z',
+        recommendedLength: {
+          min: 800,
+          max: 1200
+        }
       },
       {
         id: 'section2',
@@ -28,7 +32,11 @@ export const mockBlogPosts: BlogPost[] = [
         content: 'コンポーネントは...',
         sortOrder: 2,
         createdAt: '2024-02-19T10:00:00Z',
-        updatedAt: '2024-02-19T10:00:00Z'
+        updatedAt: '2024-02-19T10:00:00Z',
+        recommendedLength: {
+          min: 800,
+          max: 1200
+        }
       }
     ]
   },
@@ -51,6 +59,10 @@ export const mockBlogPosts: BlogPost[] = [
         sortOrder: 1,
         createdAt: '2024-02-02T00:00:00Z',
         updatedAt: '2024-02-02T00:00:00Z',
+        recommendedLength: {
+          min: 800,
+          max: 1200
+        }
       }
     ]
   }
