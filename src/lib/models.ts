@@ -18,6 +18,7 @@ export interface BlogSection {
   postId?: string;
   title: string;
   content: string;
+  description?: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +33,7 @@ export interface FormSection {
   postId?: string;
   title: string;
   content: string;
+  description?: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

@@ -541,6 +541,7 @@ export interface GeneratedOutline {
   sections: {
     title: string;
     content: string;
+    description?: string;
     type: 'main' | 'conclusion';
     recommendedLength?: {
       min: number;

@@ -35,6 +35,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   const defaultSection: FormSection = {
     title: '',
     content: '',
+    description: '',
     sortOrder: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -74,6 +75,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             postId: s.postId,
             title: s.title,
             content: s.content,
+            description: s.description,
             sortOrder: s.sortOrder,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
@@ -90,6 +92,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
               postId: s.postId,
               title: s.title,
               content: s.content,
+              description: s.description,
               sortOrder: s.sortOrder,
               createdAt: s.createdAt,
               updatedAt: s.updatedAt,
@@ -205,6 +208,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
       const newSections = outline.sections.map((section, index) => ({
         title: section.title,
         content: section.content || '',
+        description: section.description || '',
         sortOrder: index,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -352,7 +356,7 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         title: formData.title,
         sections: sections.map(s => ({
           title: s.title,
-          description: '',
+          description: s.description,
           content: s.content
         }))
       };
