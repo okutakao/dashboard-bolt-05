@@ -28,6 +28,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [abortControllers, setAbortControllers] = useState<Record<number, AbortController>>({});
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [abortingSection, setAbortingSection] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -83,16 +84,11 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         message: 'セクションを再生成しました'
       });
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        setToast({
-          type: 'info',
-          message: '生成を中止しました'
-        });
-      } else {
+      if (error.name !== 'AbortError') {
         console.error('Error regenerating section:', error);
         setToast({
           type: 'error',
-          message: error.message || 'セクションの再生成に失敗しました'
+          message: 'セクションの再生成に失敗しました'
         });
       }
     } finally {
@@ -106,21 +102,21 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleAbortGeneration = (index: number) => {
-    try {
-      const controller = abortControllers[index];
-      if (controller) {
+    const controller = abortControllers[index];
+    if (controller) {
+      try {
         controller.abort();
         setToast({
           type: 'info',
-          message: '生成を中止しています...'
+          message: '生成を中止しました'
+        });
+      } catch (error) {
+        console.error('Error aborting generation:', error);
+        setToast({
+          type: 'error',
+          message: '生成の中止に失敗しました'
         });
       }
-    } catch (error) {
-      console.error('Error aborting generation:', error);
-      setToast({
-        type: 'error',
-        message: '生成の中止に失敗しました'
-      });
     }
   };
 
