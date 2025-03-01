@@ -83,11 +83,16 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         message: 'セクションを再生成しました'
       });
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        setToast({
+          type: 'info',
+          message: '生成を中止しました'
+        });
+      } else {
         console.error('Error regenerating section:', error);
         setToast({
           type: 'error',
-          message: 'セクションの再生成に失敗しました'
+          message: '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
         });
       }
     } finally {
