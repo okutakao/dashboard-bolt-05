@@ -55,65 +55,44 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   };
 
   const handleRegenerateSection = async (index: number) => {
+    const controller = new AbortController();
+    abortControllers[index] = controller;
+
     try {
-      setGeneratingSections(prev => [...prev, index]);
-      const controller = new AbortController();
-      setAbortControllers(prev => ({ ...prev, [index]: controller }));
-
-      const section = outline.sections[index];
-      const previousSections = outline.sections.slice(0, index).map(s => ({
-        title: s.title,
-        content: sectionContents[outline.sections.indexOf(s)] || ''
-      }));
-
-      const newContent = await generateBlogContent(
+      const content = await generateBlogContent(
         outline.title,
-        section.title,
-        previousSections,
+        outline.sections[index].title,
+        outline.sections.slice(0, index).map((s, i) => ({
+          title: s.title,
+          content: sectionContents[i] || s.content || ''
+        })),
         index === outline.sections.length - 1,
         controller.signal
       );
-
-      setSectionContents(prev => ({
-        ...prev,
-        [index]: newContent
-      }));
-      setToast({
-        type: 'success',
-        message: 'セクションを再生成しました'
-      });
-    } catch (error: any) {
-      console.log('Error in handleRegenerateSection:', error);
-      
-      // 中止に関連するエラーの判定を改善
-      const isAbortError = 
-        error?.name === 'AbortError' ||
-        error?.message === 'AbortError' ||
-        error?.message === '生成を中止しました' ||
-        error?.message?.includes('abort') ||
-        error?.message?.includes('aborted') ||
-        error?.message?.includes('Signal is aborted') ||
-        abortControllers[index]?.signal.aborted;
-
-      if (isAbortError) {
+      setSectionContents(prev => ({ ...prev, [index]: content }));
+    } catch (error) {
+      console.error('Content generation error:', error);
+      // AbortErrorの判定を改善
+      if (
+        error instanceof Error && (
+          error.name === 'AbortError' ||
+          error.message === 'AbortError' ||
+          error.message === '生成を中止しました' ||
+          error.message.includes('signal is aborted')
+        )
+      ) {
         setToast({
           type: 'info',
           message: '生成を中止しました'
         });
         return;
       }
-
       setToast({
         type: 'error',
         message: '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
       });
     } finally {
-      setGeneratingSections(prev => prev.filter(i => i !== index));
-      setAbortControllers(prev => {
-        const newControllers = { ...prev };
-        delete newControllers[index];
-        return newControllers;
-      });
+      delete abortControllers[index];
     }
   };
 

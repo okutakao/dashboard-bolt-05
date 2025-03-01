@@ -185,7 +185,7 @@ export async function generateBlogContent(
   const generateWithRetry = async (retryCount: number): Promise<string> => {
     try {
       if (signal?.aborted) {
-        const error = new Error('AbortError');
+        const error = new Error('生成を中止しました');
         error.name = 'AbortError';
         throw error;
       }
@@ -213,10 +213,8 @@ export async function generateBlogContent(
 
     } catch (error) {
       if (error instanceof Error) {
-        if (error.name === 'AbortError' || error.message === 'AbortError') {
-          const abortError = new Error('生成を中止しました');
-          abortError.name = 'AbortError';
-          throw abortError;
+        if (error.name === 'AbortError' || error.message === '生成を中止しました') {
+          throw error;
         }
         // APIレート制限エラーの場合
         if (error.message.includes('rate_limit') && retryCount < maxRetries) {
