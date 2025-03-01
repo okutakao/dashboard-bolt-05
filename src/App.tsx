@@ -11,12 +11,13 @@ import { Toast } from './components/Toast';
 import { Breadcrumb } from './components/Breadcrumb';
 import { LogOut } from 'lucide-react';
 import { supabase } from './supabase';
+import { createBlogPost, updateBlogPost } from './lib/supabase/blogService';
 
 type View = 'list' | 'detail' | 'edit' | 'create';
 
 export function App() {
   const { user } = useAuth();
-  const { error: postsError, refreshPosts } = useBlogPosts();
+  const { posts, loading, error: postsError, refreshPosts } = useBlogPosts();
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<View>('list');
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
@@ -70,13 +71,27 @@ export function App() {
   };
 
   const handleSavePost = async (post: BlogPost | NewBlogPost | UpdateBlogPost) => {
-    await refreshPosts();
-    if ('id' in post) {
-      setSelectedPostId(post.id);
+    if (!user) {
+      setToast({ type: 'error', message: '認証が必要です' });
+      return;
+    }
+
+    try {
+      if ('id' in post) {
+        // 更新の場合
+        await updateBlogPost(post as UpdateBlogPost);
+        setSelectedPostId(post.id);
+      } else {
+        // 新規作成の場合
+        const newPost = await createBlogPost(post as NewBlogPost, user.id);
+        setSelectedPostId(newPost.id);
+      }
       setCurrentView('detail');
-    } else {
-      setCurrentView('list');
-      setSelectedPostId(null);
+      await refreshPosts();
+      setToast({ type: 'success', message: '記事を保存しました' });
+    } catch (error) {
+      console.error('Error saving post:', error);
+      setToast({ type: 'error', message: '記事の保存に失敗しました' });
     }
   };
 
