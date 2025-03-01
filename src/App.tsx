@@ -5,7 +5,7 @@ import { BlogPostDetail } from './components/BlogPostDetail';
 import { ThemeToggle } from './components/ThemeToggle';
 import { AuthFormV2 } from './components/AuthFormV2';
 import { useAuth } from './contexts/AuthContext';
-import { BlogPost } from './lib/models';
+import { BlogPost, NewBlogPost, UpdateBlogPost } from './lib/models';
 import { useBlogPosts } from './hooks/useBlogPosts';
 import { Toast } from './components/Toast';
 import { Breadcrumb } from './components/Breadcrumb';
@@ -69,9 +69,9 @@ export function App() {
     }
   };
 
-  const handleSavePost = async (post: BlogPost) => {
+  const handleSavePost = async (post: BlogPost | NewBlogPost | UpdateBlogPost) => {
     await refreshPosts();
-    if (currentView === 'edit' && post.id) {
+    if ('id' in post) {
       setSelectedPostId(post.id);
       setCurrentView('detail');
     } else {
