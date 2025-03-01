@@ -28,7 +28,6 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [abortControllers, setAbortControllers] = useState<Record<number, AbortController>>({});
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [abortingSection, setAbortingSection] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
