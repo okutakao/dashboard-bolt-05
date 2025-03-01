@@ -17,7 +17,7 @@ type View = 'list' | 'detail' | 'edit' | 'create';
 
 export function App() {
   const { user } = useAuth();
-  const { posts, loading, error: postsError, refreshPosts } = useBlogPosts();
+  const { error: postsError, refreshPosts } = useBlogPosts();
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<View>('list');
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
