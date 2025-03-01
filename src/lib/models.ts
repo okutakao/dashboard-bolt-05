@@ -22,7 +22,7 @@ export interface BlogSection {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-  recommendedLength?: {
+  recommendedLength: {
     min: number;
     max: number;
   };
@@ -37,7 +37,7 @@ export interface FormSection {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
-  recommendedLength?: {
+  recommendedLength: {
     min: number;
     max: number;
   };
@@ -96,6 +96,10 @@ export interface UpdateBlogPost extends BlogPost {
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
+    recommendedLength: {
+      min: number;
+      max: number;
+    };
   }>;
 }
 

@@ -40,7 +40,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     description: '',
     sortOrder: 0,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    recommendedLength: {
+      min: 800,
+      max: 1200
+    }
   };
 
   const [post, setPost] = useState<BlogPost | null>(null);
@@ -81,7 +85,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             sortOrder: s.sortOrder,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
-            recommendedLength: s.recommendedLength
+            recommendedLength: s.recommendedLength || {
+              min: 800,
+              max: 1200
+            }
           })));
           setFormData({
             title: fetchedPost.title,
@@ -98,7 +105,10 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
               sortOrder: s.sortOrder,
               createdAt: s.createdAt,
               updatedAt: s.updatedAt,
-              recommendedLength: s.recommendedLength
+              recommendedLength: s.recommendedLength || {
+                min: 800,
+                max: 1200
+              }
             }))
           });
         }
@@ -142,7 +152,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           description: s.description || '',
           sortOrder: s.sortOrder,
           createdAt: s.createdAt,
-          updatedAt: s.updatedAt
+          updatedAt: s.updatedAt,
+          recommendedLength: s.recommendedLength
         }))
       };
 
@@ -163,7 +174,8 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
             description: s.description || '',
             sortOrder: s.sortOrder,
             createdAt: s.createdAt,
-            updatedAt: s.updatedAt
+            updatedAt: s.updatedAt,
+            recommendedLength: s.recommendedLength
           }))
         };
         await onSave(updatedPost);
@@ -221,7 +233,11 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
         description: section.description || '',
         sortOrder: index,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        recommendedLength: section.recommendedLength || {
+          min: 800,
+          max: 1200
+        }
       }));
       setSections(newSections);
       setToast({ type: 'success', message: '記事構成を生成しました' });
