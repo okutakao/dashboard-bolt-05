@@ -12,7 +12,9 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
   while (retryCount <= maxRetries) {
     try {
       if (signal?.aborted) {
-        throw new Error('AbortError');
+        const error = new Error('AbortError');
+        error.name = 'AbortError';
+        throw error;
       }
 
       console.log(`🔄 APIリクエストを実行中... (試行: ${retryCount + 1}/${maxRetries + 1})`);
@@ -67,9 +69,14 @@ async function callOpenAIFunction(messages: OpenAIMessage[], options?: Record<st
           stack: error.stack
         });
 
-        if (error.name === 'AbortError' || signal?.aborted) {
-          console.log('❌ リクエストが中断されました');
-          throw new Error('リクエストが中断されました');
+        // AbortErrorの判定を改善
+        if (error.name === 'AbortError' || 
+            error.message.includes('abort') || 
+            error.message.includes('aborted') || 
+            signal?.aborted) {
+          const abortError = new Error('AbortError');
+          abortError.name = 'AbortError';
+          throw abortError;
         }
       }
 

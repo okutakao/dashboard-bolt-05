@@ -84,16 +84,25 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       });
     } catch (error: any) {
       console.log('Error in handleRegenerateSection:', error);
-      if (error?.name === 'AbortError' || 
-          error?.message?.includes('AbortError') || 
-          error?.message?.includes('aborted') ||
-          error?.message?.includes('Signal is aborted')) {
+      
+      // 中止に関連するエラーの判定を改善
+      const isAbortError = 
+        error?.name === 'AbortError' ||
+        (error instanceof Error && (
+          error.message.includes('abort') ||
+          error.message.includes('aborted') ||
+          error.message.includes('Signal is aborted')
+        )) ||
+        abortControllers[index]?.signal.aborted;
+
+      if (isAbortError) {
         setToast({
           type: 'info',
           message: '生成を中止しました'
         });
         return;
       }
+
       console.error('Error regenerating section:', error);
       setToast({
         type: 'error',
@@ -112,9 +121,11 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const handleAbortGeneration = (index: number) => {
     const controller = abortControllers[index];
     if (controller) {
-      controller.abort();
-      // トーストメッセージはhandleRegenerateSection内のcatchブロックで表示されるため、
-      // ここでは表示しない
+      try {
+        controller.abort();
+      } catch (error) {
+        console.error('Error in handleAbortGeneration:', error);
+      }
     }
   };
 
