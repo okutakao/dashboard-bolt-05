@@ -88,11 +88,11 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       // 中止に関連するエラーの判定を改善
       const isAbortError = 
         error?.name === 'AbortError' ||
-        (error instanceof Error && (
-          error.message.includes('abort') ||
-          error.message.includes('aborted') ||
-          error.message.includes('Signal is aborted')
-        )) ||
+        error?.message === 'AbortError' ||
+        error?.message === '生成を中止しました' ||
+        error?.message?.includes('abort') ||
+        error?.message?.includes('aborted') ||
+        error?.message?.includes('Signal is aborted') ||
         abortControllers[index]?.signal.aborted;
 
       if (isAbortError) {
@@ -103,7 +103,6 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         return;
       }
 
-      console.error('Error regenerating section:', error);
       setToast({
         type: 'error',
         message: '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
@@ -121,11 +120,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
   const handleAbortGeneration = (index: number) => {
     const controller = abortControllers[index];
     if (controller) {
-      try {
-        controller.abort();
-      } catch (error) {
-        console.error('Error in handleAbortGeneration:', error);
-      }
+      controller.abort();
     }
   };
 
