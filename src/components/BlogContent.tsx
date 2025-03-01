@@ -25,7 +25,6 @@ type BlogContentProps = {
 
 export function BlogContent({ outline, isGenerating = false, onContentReorder, activeSection = 0, onRegenerateAll }: BlogContentProps) {
   const [sectionContents, setSectionContents] = useState<Record<number, string>>({});
-  const [generatingSections, setGeneratingSections] = useState<number[]>([]);
   const [abortControllers, setAbortControllers] = useState<Record<number, AbortController>>({});
   const [toast, setToast] = useState<ToastState | null>(null);
 
@@ -168,7 +167,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
                   isActive={index === activeSection}
                   onContentChange={handleContentChange}
                   onRegenerate={handleRegenerateSection}
-                  isGenerating={generatingSections.includes(index)}
+                  isGenerating={false}
                   onAbort={() => handleAbortGeneration(index)}
                 />
               ))}
