@@ -170,12 +170,10 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
     throw new Error('セッションが無効です');
   }
 
-  let tempPostId: string | null = null;
-
   try {
-    const { data: newPost, error: postError } = await supabase
-      .from('blog_posts')
-      .insert({
+    // トランザクションを開始
+    const { data: result, error: txError } = await supabase.rpc('create_blog_post_with_sections', {
+      post_data: {
         user_id: userId,
         title: post.title,
         theme: post.theme,
@@ -184,45 +182,28 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
         mode: post.mode,
         created_at: post.createdAt,
         updated_at: post.updatedAt
-      })
-      .select()
-      .single();
+      },
+      sections_data: post.sections.map((section, index) => ({
+        title: section.title,
+        content: section.content,
+        sort_order: index,
+        created_at: section.createdAt,
+        updated_at: section.updatedAt,
+        description: section.description || '',
+        recommended_length: section.recommendedLength || {
+          min: 800,
+          max: 1200
+        }
+      }))
+    });
 
-    if (postError || !newPost) {
-      throw new Error('記事の作成に失敗しました: ' + (postError?.message || '不明なエラー'));
+    if (txError) {
+      throw new Error('記事の作成に失敗しました: ' + txError.message);
     }
 
-    tempPostId = newPost.id;
-
-    const sectionsToCreate = post.sections.map((section, index) => ({
-      post_id: newPost.id,
-      title: section.title,
-      content: section.content,
-      sort_order: index,
-      created_at: section.createdAt,
-      updated_at: section.updatedAt,
-      description: section.description || '',
-      recommended_length: section.recommendedLength || {
-        min: 800,
-        max: 1200
-      }
-    }));
-
-    const { data: sections, error: sectionsError } = await supabase
-      .from('blog_sections')
-      .insert(sectionsToCreate)
-      .select();
-
-    if (sectionsError || !sections) {
-      if (tempPostId) {
-        await supabase
-          .from('blog_posts')
-          .delete()
-          .eq('id', tempPostId);
-      }
-      throw new Error('セクションの作成に失敗しました: ' + (sectionsError?.message || '不明なエラー'));
-    }
-
+    // 結果を整形して返す
+    const { post: newPost, sections } = result;
+    
     return {
       id: newPost.id,
       userId: newPost.user_id,
@@ -248,75 +229,51 @@ export async function createBlogPost(post: NewBlogPost, userId: string): Promise
         }
       }))
     };
-
   } catch (error) {
-    if (tempPostId) {
-      await supabase
-        .from('blog_posts')
-        .delete()
-        .eq('id', tempPostId);
-    }
-    
     console.error('記事作成中にエラーが発生:', error);
-    throw new Error(error instanceof Error ? error.message : '記事の作成に失敗しました');
+    throw error instanceof Error ? error : new Error('記事の作成に失敗しました');
   }
 }
 
 export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
+  const isSessionValid = await ensureValidSession();
+  if (!isSessionValid) {
+    throw new Error('セッションが無効です');
+  }
+
   try {
-    const { data: updatedPost, error: updateError } = await supabase
-      .from('blog_posts')
-      .update({
+    // トランザクションを開始
+    const { data: result, error: txError } = await supabase.rpc('update_blog_post_with_sections', {
+      post_id: post.id,
+      post_data: {
         title: post.title,
         theme: post.theme,
         tone: post.tone,
         status: post.status,
         mode: post.mode,
         updated_at: post.updatedAt
-      })
-      .eq('id', post.id)
-      .eq('user_id', post.userId)
-      .select()
-      .single();
+      },
+      sections_data: post.sections.map((section: UpdateBlogPost['sections'][0], index: number) => ({
+        title: section.title,
+        content: section.content,
+        sort_order: index,
+        created_at: section.createdAt,
+        updated_at: section.updatedAt,
+        description: section.description || '',
+        recommended_length: section.recommendedLength || {
+          min: 800,
+          max: 1200
+        }
+      }))
+    });
 
-    if (updateError) {
-      throw new Error('記事の更新に失敗しました: ' + updateError.message);
+    if (txError) {
+      throw new Error('記事の更新に失敗しました: ' + txError.message);
     }
 
-    const sectionsToCreate = post.sections.map((section, index) => ({
-      post_id: post.id,
-      title: section.title,
-      content: section.content,
-      sort_order: index,
-      created_at: section.createdAt,
-      updated_at: section.updatedAt,
-      description: section.description || '',
-      recommended_length: section.recommendedLength || {
-        min: 800,
-        max: 1200
-      }
-    }));
-
-    // 既存のセクションを削除
-    const { error: deleteError } = await supabase
-      .from('blog_sections')
-      .delete()
-      .eq('post_id', post.id);
-
-    if (deleteError) {
-      throw new Error('セクションの削除に失敗しました: ' + deleteError.message);
-    }
-
-    // 新しいセクションを作成
-    const { data: sections, error: insertError } = await supabase
-      .from('blog_sections')
-      .insert(sectionsToCreate)
-      .select();
-
-    if (insertError) {
-      throw new Error('セクションの作成に失敗しました: ' + insertError.message);
-    }
-
+    // 結果を整形して返す
+    const { post: updatedPost, sections } = result;
+    
     return {
       id: updatedPost.id,
       userId: updatedPost.user_id,
@@ -327,7 +284,7 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
       mode: updatedPost.mode,
       createdAt: updatedPost.created_at,
       updatedAt: updatedPost.updated_at,
-      sections: sections.map(section => ({
+      sections: sections.map((section: DatabaseBlogSection) => ({
         id: section.id,
         postId: section.post_id,
         title: section.title,
@@ -342,9 +299,8 @@ export async function updateBlogPost(post: UpdateBlogPost): Promise<BlogPost> {
         }
       }))
     };
-
   } catch (error) {
-    console.error('記事の更新処理中にエラーが発生:', error);
+    console.error('記事更新中にエラーが発生:', error);
     throw error instanceof Error ? error : new Error('記事の更新に失敗しました');
   }
 }
