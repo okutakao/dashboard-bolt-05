@@ -583,10 +583,13 @@ export function validateOutlineResponse(response: string): GeneratedOutline {
  */
 export async function generateTitle(theme: string, content?: string): Promise<string[]> {
   const maxRetries = 3;
-  const baseDelay = 1000;
+  let retryCount = 0;
 
-  const generateWithRetry = async (attempt: number): Promise<string[]> => {
+  while (retryCount < maxRetries) {
     try {
+      console.log(`📝 タイトル生成を開始します (試行: ${retryCount + 1}/${maxRetries})`);
+      console.log(`📌 テーマ: ${theme}`);
+
       const messages: OpenAIMessage[] = [
         {
           role: "system",
@@ -609,61 +612,59 @@ ${content ? `内容: ${content}` : ''}
         }
       ];
 
-      console.log('タイトル生成リクエストを送信:', { theme, content });
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/openai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({ messages })
-      });
-
-      const data = await response.json();
-      console.log('タイトル生成レスポンス:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || 'APIリクエストが失敗しました');
-      }
-
-      const titles = data.content.split('\n').filter((title: string) => 
-        title.trim() && title.length <= 30
-      );
-
-      console.log('生成されたタイトル:', titles);
+      const response = await callOpenAIFunction(messages);
+      
+      // レスポンスからタイトルを抽出
+      const titles = response
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && line.length <= 30 && !line.startsWith('-') && !line.startsWith('条件：'));
 
       if (titles.length === 0) {
-        throw new Error('有効なタイトルが生成されませんでした');
+        console.warn('⚠️ 有効なタイトルが生成されませんでした');
+        if (retryCount < maxRetries - 1) {
+          console.log(`🔄 ${1000 * retryCount}ms後に再試行します (${retryCount + 2}/${maxRetries}試行目)`);
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+        throw new Error('タイトルを生成できませんでした');
       }
 
-      if (titles.length < 3) {
-        throw new Error(`十分な数のタイトルが生成されませんでした（生成数: ${titles.length}）`);
-      }
+      const validTitles = titles.slice(0, 3);
+      console.log('✨ タイトル生成成功:');
+      validTitles.forEach((title, index) => {
+        console.log(`   ${index + 1}. ${title}`);
+      });
+      return validTitles;
 
-      return titles.slice(0, 3);
-    } catch (error: unknown) {
-      console.error('タイトル生成エラー:', error);
+    } catch (error) {
+      console.error(`❌ タイトル生成エラー (試行: ${retryCount + 1}/${maxRetries})`);
       
       if (error instanceof Error) {
-        console.error('エラー詳細:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
-
-      if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt - 1);
-        console.log(`エラーが発生しました。${delay}ms後に再試行します...（試行回数: ${attempt}/${maxRetries}）`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return generateWithRetry(attempt + 1);
+        console.error(`   エラー詳細: ${error.message}`);
+        
+        // セッション関連のエラーの場合は即座に再試行
+        if (error.message.includes('session') || error.message.includes('token')) {
+          if (retryCount < maxRetries - 1) {
+            console.log('🔄 セッションエラーを検出。500ms後に再試行します');
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+        }
       }
       
-      const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
-      throw new Error(`タイトル生成に失敗しました: ${errorMessage}`);
+      if (retryCount === maxRetries - 1) {
+        console.error('❌ 最大試行回数に達しました');
+        throw new Error('タイトルの生成に失敗しました。しばらく待ってから再度お試しください。');
+      }
+      
+      console.log(`🔄 ${1000 * retryCount}ms後に再試行します (${retryCount + 2}/${maxRetries}試行目)`);
+      retryCount++;
+      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
     }
-  };
+  }
 
-  return generateWithRetry(1);
+  throw new Error('タイトルの生成に失敗しました');
 }
