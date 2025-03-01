@@ -1,6 +1,6 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { PlusCircle, Save, ArrowUp, ArrowDown, Trash2, Eye, Edit, Wand2, Loader2, X, Layers, GitBranch } from 'lucide-react';
-import { BlogPost, FormSection, FormData } from '../lib/models';
+import { BlogPost, NewBlogPost, UpdateBlogPost, FormSection, FormData } from '../lib/models';
 import { createBlogPost, updateBlogPost, getBlogPost } from '../lib/supabase/blogService';
 import { generateTitle, generateBlogOutline, generateBlogContent } from '../lib/openai';
 import { ExportMenu } from './ExportMenu';
@@ -33,6 +33,8 @@ interface Toast {
 
 export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   const defaultSection: FormSection = {
+    id: '',
+    postId: '',
     title: '',
     content: '',
     description: '',
@@ -125,15 +127,26 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
     setIsSubmitting(true);
 
     try {
-      const now = new Date().toISOString();
-      const updatedSections = sections.map((section, index) => ({
-        ...section,
-        sortOrder: index,
-        updatedAt: now
-      }));
+      const newPost: NewBlogPost = {
+        title: formData.title,
+        theme: formData.theme,
+        tone: formData.tone,
+        status: formData.status,
+        mode: formData.mode,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sections: sections.map(s => ({
+          title: s.title,
+          content: s.content,
+          description: s.description || '',
+          sortOrder: s.sortOrder,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt
+        }))
+      };
 
       if (post) {
-        const updatedPost = await updateBlogPost({
+        const updatedPost: UpdateBlogPost = {
           id: post.id,
           userId: post.userId,
           title: formData.title,
@@ -142,29 +155,27 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
           status: formData.status,
           mode: formData.mode,
           createdAt: post.createdAt,
-          updatedAt: now,
-          sections: updatedSections
-        });
-        onSave(updatedPost);
-        setToast({ type: 'success', message: '記事を更新しました' });
+          updatedAt: new Date().toISOString(),
+          sections: sections.map(s => ({
+            id: s.id,
+            postId: s.postId,
+            title: s.title,
+            content: s.content,
+            description: s.description || '',
+            sortOrder: s.sortOrder,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt
+          }))
+        };
+        await onSave(updatedPost);
       } else {
-        const newPost = await createBlogPost({
-          title: formData.title,
-          theme: formData.theme,
-          tone: formData.tone,
-          status: formData.status,
-          mode: formData.mode,
-          createdAt: now,
-          updatedAt: now,
-          sections: updatedSections
-        }, user.id);
-        onSave(newPost);
-        setToast({ type: 'success', message: '記事を作成しました' });
+        await onSave(newPost);
       }
-    } catch (err: unknown) {
-      const error = err as Error;
+
+      setToast({ type: 'success', message: '記事を保存しました' });
+    } catch (error) {
       console.error('Error saving post:', error);
-      setToast({ type: 'error', message: error.message || '保存中にエラーが発生しました' });
+      setToast({ type: 'error', message: '記事の保存に失敗しました' });
     } finally {
       setIsSubmitting(false);
     }
@@ -197,40 +208,27 @@ export function BlogPostForm({ postId, onSave, user }: BlogPostFormProps) {
   };
 
   const handleGenerateOutline = async () => {
-    if (!formData.theme) {
-      setToast({ type: 'error', message: 'テーマを入力してください' });
+    if (!formData.theme || !formData.tone) {
+      setToast({ type: 'error', message: 'テーマとトーンを入力してください' });
       return;
     }
-    setGeneratingOutline(true);
 
+    setGeneratingOutline(true);
     try {
       const outline = await generateBlogOutline(formData.theme, formData.tone);
       const newSections = outline.sections.map((section, index) => ({
+        ...defaultSection,
         title: section.title,
-        content: section.content || '',
         description: section.description || '',
         sortOrder: index,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        recommendedLength: section.recommendedLength || {
-          min: index === outline.sections.length - 1 ? 400 : 800,
-          max: index === outline.sections.length - 1 ? 600 : 1200
-        }
+        updatedAt: new Date().toISOString()
       }));
       setSections(newSections);
-
-      // 推定読了時間と合計文字数の情報を表示
-      if (outline.estimatedTotalLength && outline.estimatedReadingTime) {
-        setToast({
-          type: 'success',
-          message: `記事構成を生成しました（推定総文字数: ${outline.estimatedTotalLength.min}〜${outline.estimatedTotalLength.max}文字、読了時間: 約${outline.estimatedReadingTime}分）`
-        });
-      } else {
-        setToast({ type: 'success', message: '記事構成を生成しました' });
-      }
+      setToast({ type: 'success', message: '記事構成を生成しました' });
     } catch (error) {
       console.error('Error generating outline:', error);
-      setToast({ type: 'error', message: '記事構成の生成中にエラーが発生しました' });
+      setToast({ type: 'error', message: '記事構成の生成に失敗しました' });
     } finally {
       setGeneratingOutline(false);
     }

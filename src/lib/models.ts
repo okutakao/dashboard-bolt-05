@@ -78,6 +78,7 @@ export interface NewBlogPost {
   sections: Array<{
     title: string;
     content: string;
+    description?: string;
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
@@ -99,6 +100,7 @@ export interface UpdateBlogPost {
     postId?: string;
     title: string;
     content: string;
+    description?: string;
     sortOrder: number;
     createdAt: string;
     updatedAt: string;
@@ -125,4 +127,15 @@ export interface ArticleStructure {
     targetLength: { min: number; max: number };
     fullContext: string;
   };
+}
+
+export interface ExportableContent {
+  id: string;
+  title: string;
+  sections: {
+    title: string;
+    description?: string;
+    content?: string;
+    recommendedLength?: number;
+  }[];
 }
