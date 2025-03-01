@@ -55,7 +55,7 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
 
   const handleRegenerateSection = async (index: number) => {
     const controller = new AbortController();
-    abortControllers[index] = controller;
+    setAbortControllers(prev => ({ ...prev, [index]: controller }));
 
     try {
       const content = await generateBlogContent(
@@ -71,7 +71,6 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
       setSectionContents(prev => ({ ...prev, [index]: content }));
     } catch (error) {
       console.error('Content generation error:', error);
-      // AbortErrorの判定を改善
       if (
         error instanceof Error && (
           error.name === 'AbortError' ||
@@ -91,15 +90,22 @@ export function BlogContent({ outline, isGenerating = false, onContentReorder, a
         message: '内容の生成中にエラーが発生しました。しばらく待ってから再度お試しください。'
       });
     } finally {
-      delete abortControllers[index];
+      setAbortControllers(prev => {
+        const newState = { ...prev };
+        delete newState[index];
+        return newState;
+      });
     }
   };
 
   const handleAbortGeneration = (index: number) => {
-    const controller = abortControllers[index];
-    if (controller) {
-      controller.abort();
-    }
+    setAbortControllers(prev => {
+      const controller = prev[index];
+      if (controller) {
+        controller.abort();
+      }
+      return prev;
+    });
   };
 
   const handleExport = (format: ExportFormat) => {
